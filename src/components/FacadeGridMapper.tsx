@@ -767,11 +767,7 @@ function ModeChooser({ onChoose }: { onChoose: (mode: AppMode) => void }) {
           <span className="text-5xl font-black tracking-tight text-cyan-400">FCRS</span>
           <span className="mt-1 text-lg font-light text-slate-400">Grid Tool</span>
         </div>
-        <p className="max-w-md text-sm leading-relaxed text-slate-400">
-          Facade inspection grid mapper — overlay measurement grids on facade
-          and rooftop images for structural assessments.
-        </p>
-        <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+        <div className="flex items-center gap-2 text-xs text-slate-600">
           <span>Developed by</span>
           <span className="font-semibold text-slate-400">Daniel Vidal</span>
         </div>
