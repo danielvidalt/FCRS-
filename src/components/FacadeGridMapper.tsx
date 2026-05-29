@@ -760,18 +760,40 @@ export default function FacadeGridMapper() {
 
 function ModeChooser({ onChoose }: { onChoose: (mode: AppMode) => void }) {
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
-        <ModeButton
-          title="Image"
-          body="Work with one image using the current interface."
-          onClick={() => onChoose("image")}
-        />
-        <ModeButton
-          title="Project"
-          body="Create one project with multiple facade and rooftop views."
-          onClick={() => onChoose("project")}
-        />
+    <main className="flex flex-1 flex-col items-center justify-center gap-10 p-6">
+      {/* Welcome / branding */}
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex items-center gap-3">
+          <span className="text-5xl font-black tracking-tight text-cyan-400">FCRS</span>
+          <span className="mt-1 text-lg font-light text-slate-400">Grid Tool</span>
+        </div>
+        <p className="max-w-md text-sm leading-relaxed text-slate-400">
+          Facade inspection grid mapper — overlay measurement grids on facade
+          and rooftop images for structural assessments.
+        </p>
+        <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+          <span>Developed by</span>
+          <span className="font-semibold text-slate-400">Daniel Vidal</span>
+        </div>
+      </div>
+
+      {/* Mode selection */}
+      <div className="w-full max-w-2xl">
+        <p className="mb-4 text-center text-xs font-medium uppercase tracking-widest text-slate-500">
+          Select a mode to get started
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ModeButton
+            title="Image"
+            body="Work with a single image — upload, generate grid, adjust lines and labels, then export."
+            onClick={() => onChoose("image")}
+          />
+          <ModeButton
+            title="Project"
+            body="Multi-view project — organise North, South, East, West facades and Rooftop in one file."
+            onClick={() => onChoose("project")}
+          />
+        </div>
       </div>
     </main>
   );
