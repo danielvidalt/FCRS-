@@ -16,6 +16,7 @@ import WorkspaceDropOverlay from "@/components/WorkspaceDropOverlay";
 import { isValidImageFile } from "@/lib/image-upload";
 import {
   DEFAULT_GRID_SETTINGS,
+  type FreeLabelData,
   type GridSettings,
   type MultiFacadeProjectData,
   type ProjectData,
@@ -151,6 +152,7 @@ export default function FacadeGridMapper() {
   const [moveGridMode, setMoveGridMode] = useState(false);
   const [hasImage, setHasImage] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedFreeLabelStyle, setSelectedFreeLabelStyle] = useState<FreeLabelData | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -632,7 +634,15 @@ export default function FacadeGridMapper() {
             settings={settings}
             panMode={panMode}
             moveGridMode={moveGridMode}
-            onSelectionChange={setSelectedLineId}
+            onSelectionChange={(lineId, freeLabelId) => {
+              setSelectedLineId(lineId);
+              if (freeLabelId) {
+                const meta = canvasRef.current?.getFreeLabelMeta(freeLabelId);
+                setSelectedFreeLabelStyle(meta ?? null);
+              } else {
+                setSelectedFreeLabelStyle(null);
+              }
+            }}
             onHistoryChange={handleHistoryChange}
             onSettingsChange={handleSettingsChange}
           />
@@ -659,6 +669,7 @@ export default function FacadeGridMapper() {
       <RightSidebar
         settings={settings}
         selectedLineId={selectedLineId}
+        selectedFreeLabelStyle={selectedFreeLabelStyle}
         hasImage={hasImage}
         onChange={handleSettingsChange}
         onGenerate={handleGenerate}
@@ -671,6 +682,10 @@ export default function FacadeGridMapper() {
         }}
         onRefreshLabelAppearance={(s) => {
           canvasRef.current?.refreshLabelAppearance(s);
+        }}
+        onUpdateFreeLabelStyle={(id, style) => {
+          canvasRef.current?.updateFreeLabelStyle(id, style);
+          setSelectedFreeLabelStyle((prev) => prev ? { ...prev, ...style } : null);
         }}
         moveGridMode={moveGridMode}
         onMoveGridModeChange={setMoveGridMode}

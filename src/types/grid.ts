@@ -47,6 +47,10 @@ export interface FreeLabelData {
   text: string;
   x: number;
   y: number;
+  fontSize?: number;
+  color?: string;
+  backgroundColor?: string;
+  backgroundEnabled?: boolean;
 }
 
 export interface GridLineData {

@@ -31,6 +31,7 @@ import {
   countLinesByOrientation,
   defaultLabelPosition,
   fabricLabelStyle,
+  freeLabelStyle,
   isLabelHidden,
   LABEL_KEY,
   labelKeyFor,
@@ -117,7 +118,9 @@ export interface GridCanvasHandle {
   scaleGridLive: (scaleX: number, scaleY: number) => void;
   commitGridScale: () => void;
   scaleGrid: (scaleX: number, scaleY: number) => void;
-  addFreeLabel: (opts?: { text?: string; x?: number; y?: number; enterEdit?: boolean }) => void;
+  addFreeLabel: (opts?: { text?: string; x?: number; y?: number; enterEdit?: boolean; fontSize?: number }) => void;
+  getFreeLabelMeta: (id: string) => FreeLabelData | null;
+  updateFreeLabelStyle: (id: string, style: Partial<Pick<FreeLabelData, "fontSize" | "color" | "backgroundColor" | "backgroundEnabled">>) => void;
   refreshGridStyles: (settings: GridSettings) => void;
   refreshLabels: (settings: GridSettings) => void;
   refreshLabelAppearance: (settings: GridSettings) => void;
@@ -129,7 +132,7 @@ interface GridCanvasProps {
   settings: GridSettings;
   panMode: boolean;
   moveGridMode: boolean;
-  onSelectionChange: (lineId: string | null) => void;
+  onSelectionChange: (lineId: string | null, freeLabelId: string | null) => void;
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void;
   onSettingsChange: (settings: GridSettings) => void;
 }
@@ -230,7 +233,9 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       canvas.getObjects().forEach((obj) => {
         const id = (obj as FabricObject & Record<string, string>)[FREE_LABEL_KEY];
         if (!id) return;
+        const meta = freeLabelsMetaRef.current.get(id);
         result.push({
+          ...meta,
           id,
           text: (obj as IText).text ?? "",
           x: obj.left ?? 0,
@@ -390,13 +395,12 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
             manualLabelPositionsRef.current
           );
         }
-        const style = fabricLabelStyle(gridSettings);
         canvas.getObjects().forEach((obj) => {
           const rec = obj as FabricObject & Record<string, string>;
           if (rec[LABEL_KEY]) {
             canvas.bringObjectToFront(obj);
           } else if (rec[FREE_LABEL_KEY]) {
-            (obj as IText).set(style);
+            // Free labels keep their own per-label style — just reorder
             (obj as IText).setCoords();
             canvas.bringObjectToFront(obj);
           }
@@ -452,7 +456,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         freeLabels.forEach((label) => {
           freeLabelsMetaRef.current.set(label.id, label);
           const itext = new IText(label.text || "Label", {
-            ...fabricLabelStyle(gridSettings),
+            ...freeLabelStyle(label, gridSettings),
             left: label.x,
             top: label.y,
           });
@@ -512,7 +516,9 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         if (target instanceof Text) {
           const freeId = (target as Text & Record<string, string>)[FREE_LABEL_KEY];
           if (freeId) {
+            const existing = freeLabelsMetaRef.current.get(freeId);
             freeLabelsMetaRef.current.set(freeId, {
+              ...existing,
               id: freeId,
               text: (target as IText).text ?? "",
               x: target.left ?? 0,
@@ -553,7 +559,9 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       canvas.on("text:editing:exited", ({ target }) => {
         const freeId = (target as IText & Record<string, string>)[FREE_LABEL_KEY];
         if (freeId) {
+          const existing = freeLabelsMetaRef.current.get(freeId);
           freeLabelsMetaRef.current.set(freeId, {
+            ...existing,
             id: freeId,
             text: target.text ?? "",
             x: target.left ?? 0,
@@ -598,7 +606,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           const id = getGridLineId(target);
           canvas.discardActiveObject();
           deleteLineById(id);
-          onSelectionChangeRef.current(null);
+          onSelectionChangeRef.current(null, null);
           canvas.requestRenderAll();
           pushHistory();
           return;
@@ -632,21 +640,19 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       };
       window.addEventListener("keydown", onKeyDown);
 
-      canvas.on("selection:created", () => {
+      const fireSelection = () => {
         const obj = canvas.getActiveObject();
-        const id =
-          obj && (obj as FabricObject & Record<string, string>)[GRID_LINE_KEY];
-        onSelectionChangeRef.current(typeof id === "string" ? id : null);
-      });
-      canvas.on("selection:updated", () => {
-        const obj = canvas.getActiveObject();
-        const id =
-          obj && (obj as FabricObject & Record<string, string>)[GRID_LINE_KEY];
-        onSelectionChangeRef.current(typeof id === "string" ? id : null);
-      });
-      canvas.on("selection:cleared", () =>
-        onSelectionChangeRef.current(null)
-      );
+        const rec = obj as (FabricObject & Record<string, string>) | undefined;
+        const lineId = rec?.[GRID_LINE_KEY];
+        const freeId = rec?.[FREE_LABEL_KEY];
+        onSelectionChangeRef.current(
+          typeof lineId === "string" ? lineId : null,
+          typeof freeId === "string" ? freeId : null,
+        );
+      };
+      canvas.on("selection:created", fireSelection);
+      canvas.on("selection:updated", fireSelection);
+      canvas.on("selection:cleared", () => onSelectionChangeRef.current(null, null));
 
       const onWheel = (opt: TPointerEventInfo<WheelEvent>) => {
         const e = opt.e;
@@ -889,7 +895,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         linesMetaRef.current.clear();
         manualLabelPositionsRef.current.clear();
         canvas.discardActiveObject();
-        onSelectionChangeRef.current(null);
+        onSelectionChangeRef.current(null, null);
         canvas.requestRenderAll();
         pushHistory();
       },
@@ -1123,13 +1129,16 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         const text = opts.text ?? "Label";
         const x = opts.x ?? defaultX;
         const y = opts.y ?? defaultY;
+        // Tab labels (pre-filled text, no edit mode) get a bigger default font
+        const fontSize = opts.text && !enterEdit ? 18 : undefined;
+        const labelMeta: FreeLabelData = { id, text, x, y, fontSize };
         const itext = new IText(text, {
-          ...fabricLabelStyle(settingsRef.current),
+          ...freeLabelStyle(labelMeta, settingsRef.current),
           left: x,
           top: y,
         });
         itext.set({ [FREE_LABEL_KEY]: id } as Record<string, string>);
-        freeLabelsMetaRef.current.set(id, { id, text, x, y });
+        freeLabelsMetaRef.current.set(id, labelMeta);
         canvas.add(itext);
         canvas.bringObjectToFront(itext);
         if (enterEdit) {
@@ -1141,6 +1150,27 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         pushHistory();
       },
 
+      getFreeLabelMeta: (id: string) => {
+        return freeLabelsMetaRef.current.get(id) ?? null;
+      },
+
+      updateFreeLabelStyle: (id: string, style: Partial<Pick<FreeLabelData, "fontSize" | "color" | "backgroundColor" | "backgroundEnabled">>) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const existing = freeLabelsMetaRef.current.get(id);
+        if (!existing) return;
+        const updated: FreeLabelData = { ...existing, ...style };
+        freeLabelsMetaRef.current.set(id, updated);
+        const obj = canvas.getObjects().find(
+          (o) => (o as FabricObject & Record<string, string>)[FREE_LABEL_KEY] === id
+        );
+        if (obj) {
+          (obj as IText).set(freeLabelStyle(updated, settingsRef.current));
+          (obj as IText).setCoords();
+          canvas.requestRenderAll();
+        }
+      },
+
       deleteSelectedLine: () => {
         const canvas = canvasRef.current;
         const obj = canvas?.getActiveObject();
@@ -1149,7 +1179,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         canvas.discardActiveObject();
         canvas.remove(obj);
         linesMetaRef.current.delete(id);
-        onSelectionChangeRef.current(null);
+        onSelectionChangeRef.current(null, null);
         canvas.requestRenderAll();
         pushHistory();
       },
@@ -1187,7 +1217,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLabelsRef.current(canvas, settingsRef.current);
         renderFreeLabelsRef.current(canvas, [...freeLabelsMetaRef.current.values()], settingsRef.current);
         canvas.discardActiveObject();
-        onSelectionChangeRef.current(null);
+        onSelectionChangeRef.current(null, null);
       },
 
       commitGridScale: () => {
@@ -1225,7 +1255,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLabelsRef.current(canvas, settingsRef.current);
         renderFreeLabelsRef.current(canvas, [...freeLabelsMetaRef.current.values()], settingsRef.current);
         canvas.discardActiveObject();
-        onSelectionChangeRef.current(null);
+        onSelectionChangeRef.current(null, null);
         canvas.requestRenderAll();
         pushHistory();
       },

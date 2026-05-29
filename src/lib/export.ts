@@ -2,6 +2,7 @@ import { Canvas, FabricImage, IText, Text } from "fabric";
 import { buildGridLineObject, FREE_LABEL_KEY } from "@/lib/fabric-grid";
 import {
   fabricLabelStyle,
+  freeLabelStyle,
   LABEL_KEY,
   labelKeyFor,
   isLabelHidden,
@@ -88,10 +89,10 @@ export async function renderProjectDataToDataUrl(
       }
     }
 
-    // Render free labels
+    // Render free labels with per-label style
     for (const label of project.freeLabels ?? []) {
       const itext = new IText(label.text || "Label", {
-        ...style,
+        ...freeLabelStyle(label, gridSettings),
         left: label.x,
         top: label.y,
         selectable: false,

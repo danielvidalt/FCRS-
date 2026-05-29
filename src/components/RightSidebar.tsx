@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { numberingHint } from "@/lib/grid";
-import type { GridSettings } from "@/types/grid";
+import type { FreeLabelData, GridSettings } from "@/types/grid";
 
 interface RightSidebarProps {
   settings: GridSettings;
   selectedLineId: string | null;
+  selectedFreeLabelStyle: FreeLabelData | null;
   hasImage: boolean;
   moveGridMode: boolean;
   onChange: (settings: GridSettings) => void;
@@ -16,6 +17,7 @@ interface RightSidebarProps {
   onRefreshLabels: (settings: GridSettings) => void;
   onRefreshLabelAppearance: (settings: GridSettings) => void;
   onAddLabel: () => void;
+  onUpdateFreeLabelStyle: (id: string, style: Partial<Pick<FreeLabelData, "fontSize" | "color" | "backgroundColor" | "backgroundEnabled">>) => void;
   onMoveGridModeChange: (enabled: boolean) => void;
   onBeginGridScale: () => void;
   onScaleGridLive: (scaleX: number, scaleY: number) => void;
@@ -30,12 +32,14 @@ interface RightSidebarProps {
 export default function RightSidebar({
   settings,
   selectedLineId,
+  selectedFreeLabelStyle,
   hasImage,
   moveGridMode,
   onChange,
   onGenerate,
   onResetGrid,
   onAddLabel,
+  onUpdateFreeLabelStyle,
   onMoveGridModeChange,
   onBeginGridScale,
   onScaleGridLive,
@@ -121,6 +125,61 @@ export default function RightSidebar({
           + Add label
         </button>
       </div>
+
+      {selectedFreeLabelStyle && (
+        <div className="rounded-lg border border-cyan-800 bg-cyan-950/40 p-3">
+          <h3 className="mb-3 text-xs font-semibold uppercase text-cyan-400">
+            Selected label
+          </h3>
+          <Field label={`Font size (${selectedFreeLabelStyle.fontSize ?? settings.labelFontSize}px)`}>
+            <input
+              type="range"
+              min={8}
+              max={72}
+              value={selectedFreeLabelStyle.fontSize ?? settings.labelFontSize}
+              onChange={(e) =>
+                onUpdateFreeLabelStyle(selectedFreeLabelStyle.id, { fontSize: Number(e.target.value) })
+              }
+              className="w-full accent-cyan-500"
+            />
+          </Field>
+          <Field label="Text color">
+            <input
+              type="color"
+              value={selectedFreeLabelStyle.color ?? settings.labelColor}
+              onChange={(e) =>
+                onUpdateFreeLabelStyle(selectedFreeLabelStyle.id, { color: e.target.value })
+              }
+              className="h-9 w-full cursor-pointer rounded border border-slate-700 bg-slate-900"
+            />
+          </Field>
+          <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={selectedFreeLabelStyle.backgroundEnabled ?? settings.labelBackgroundEnabled}
+              onChange={(e) =>
+                onUpdateFreeLabelStyle(selectedFreeLabelStyle.id, { backgroundEnabled: e.target.checked })
+              }
+              className="accent-cyan-500"
+            />
+            Background
+          </label>
+          {(selectedFreeLabelStyle.backgroundEnabled ?? settings.labelBackgroundEnabled) && (
+            <Field label="Background color">
+              <input
+                type="color"
+                value={hexFromRgba(selectedFreeLabelStyle.backgroundColor ?? settings.labelBackgroundColor)}
+                onChange={(e) =>
+                  onUpdateFreeLabelStyle(selectedFreeLabelStyle.id, {
+                    backgroundColor: rgbaFromHex(e.target.value, 0.88),
+                  })
+                }
+                className="h-9 w-full cursor-pointer rounded border border-slate-700 bg-slate-900"
+              />
+            </Field>
+          )}
+        </div>
+      )}
 
       <div className="border-t border-slate-800 pt-3">
         <h3 className="mb-3 text-xs font-semibold uppercase text-slate-500">
@@ -486,6 +545,7 @@ export default function RightSidebar({
           </div>
         </div>
       )}
+
     </aside>
   );
 }

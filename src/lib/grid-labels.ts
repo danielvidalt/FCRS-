@@ -1,6 +1,6 @@
 import { Text, type Canvas } from "fabric";
 import { horizontalLabel, verticalLabel } from "@/lib/grid";
-import type { GridLineData, GridSettings } from "@/types/grid";
+import type { FreeLabelData, GridLineData, GridSettings } from "@/types/grid";
 
 export const LABEL_KEY = "gridLabelId";
 
@@ -33,6 +33,25 @@ export function fabricLabelStyle(settings: GridSettings) {
     textBackgroundColor: settings.labelBackgroundEnabled
       ? settings.labelBackgroundColor
       : "",
+    padding: 6,
+    selectable: true,
+    editable: true,
+    objectCaching: false,
+  };
+}
+
+export function freeLabelStyle(label: FreeLabelData, settings: GridSettings) {
+  const enabled = label.backgroundEnabled ?? settings.labelBackgroundEnabled;
+  // Use backgroundColor (full object rect) instead of textBackgroundColor (per-char)
+  // to avoid clipping of the last character that Fabric.js textBackgroundColor exhibits.
+  return {
+    fontSize: label.fontSize ?? settings.labelFontSize,
+    fontFamily: "system-ui, sans-serif",
+    fill: label.color ?? settings.labelColor,
+    backgroundColor: enabled
+      ? (label.backgroundColor ?? settings.labelBackgroundColor)
+      : "",
+    textBackgroundColor: "",
     padding: 6,
     selectable: true,
     editable: true,
