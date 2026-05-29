@@ -16,9 +16,13 @@ export const metadata: Metadata = {
   title: "FCRS Grid Tool",
   description: "Facade inspection grid mapper — overlay measurement grids on facade and rooftop images.",
   icons: {
-    icon: "/icon.png",
-    apple: "/apple-touch-icon.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
   },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
