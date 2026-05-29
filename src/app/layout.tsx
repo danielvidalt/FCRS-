@@ -13,9 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Facade Grid Mapper",
-  description:
-    "Upload a facade or rooftop image and overlay a customizable inspection grid.",
+  title: "FCRS Grid Tool",
+  description: "Facade inspection grid mapper — overlay measurement grids on facade and rooftop images.",
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
