@@ -16,6 +16,7 @@ import WorkspaceDropOverlay from "@/components/WorkspaceDropOverlay";
 import { isValidImageFile } from "@/lib/image-upload";
 import {
   DEFAULT_GRID_SETTINGS,
+  type AnchorData,
   type FreeLabelData,
   type GridSettings,
   type MultiFacadeProjectData,
@@ -161,6 +162,9 @@ export default function FacadeGridMapper() {
   const [projectSetupOpen, setProjectSetupOpen] = useState(false);
   const [projectViews, setProjectViews] = useState<ProjectViewsState>({});
   const [projectName, setProjectName] = useState("");
+  const [anchorMode, setAnchorMode] = useState(false);
+  const [selectedAnchorId, setSelectedAnchorId] = useState<string | null>(null);
+  const [anchors, setAnchors] = useState<AnchorData[]>([]);
 
   const flash = useCallback((message: string) => {
     setStatus(message);
@@ -383,6 +387,9 @@ export default function FacadeGridMapper() {
     setProjectSetupOpen(false);
     setProjectViews({});
     setProjectName("");
+    setAnchorMode(false);
+    setSelectedAnchorId(null);
+    setAnchors([]);
     projectViewsRef.current = {};
     activeViewRef.current = "north";
     activeImageIndexRef.current = 0;
@@ -634,7 +641,9 @@ export default function FacadeGridMapper() {
             settings={settings}
             panMode={panMode}
             moveGridMode={moveGridMode}
-            onSelectionChange={(lineId, freeLabelId) => {
+            anchorMode={anchorMode}
+            onAnchorsChange={setAnchors}
+            onSelectionChange={(lineId, freeLabelId, anchorId) => {
               setSelectedLineId(lineId);
               if (freeLabelId) {
                 const meta = canvasRef.current?.getFreeLabelMeta(freeLabelId);
@@ -642,6 +651,7 @@ export default function FacadeGridMapper() {
               } else {
                 setSelectedFreeLabelStyle(null);
               }
+              setSelectedAnchorId(anchorId);
             }}
             onHistoryChange={handleHistoryChange}
             onSettingsChange={handleSettingsChange}
@@ -697,6 +707,31 @@ export default function FacadeGridMapper() {
         onRemoveControlPoint={() => canvasRef.current?.removeControlPoint()}
         onToggleLock={() => canvasRef.current?.toggleLockSelected()}
         onDeleteLine={() => canvasRef.current?.deleteSelectedLine()}
+        anchorMode={anchorMode}
+        anchors={anchors}
+        selectedAnchorId={selectedAnchorId}
+        onToggleAnchorMode={() => {
+          const next = !anchorMode;
+          setAnchorMode(next);
+          if (next) {
+            setPanMode(false);
+            setMoveGridMode(false);
+          }
+        }}
+        onSelectAnchor={(id) => {
+          setSelectedAnchorId(id);
+          canvasRef.current?.selectAnchor(id);
+        }}
+        onUpdateAnchorNotes={(id, notes) =>
+          canvasRef.current?.updateAnchorMeta(id, { notes })
+        }
+        onUpdateAnchorPhoto={(id, dataUrl) =>
+          canvasRef.current?.updateAnchorMeta(id, { photoDataUrl: dataUrl })
+        }
+        onDeleteAnchor={(id) => {
+          canvasRef.current?.deleteAnchor(id);
+          if (selectedAnchorId === id) setSelectedAnchorId(null);
+        }}
       />
     </div>
   );

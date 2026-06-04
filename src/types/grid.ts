@@ -53,6 +53,15 @@ export interface FreeLabelData {
   backgroundEnabled?: boolean;
 }
 
+export interface AnchorData {
+  id: string;
+  index: number;
+  x: number;
+  y: number;
+  notes: string;
+  photoDataUrl?: string;
+}
+
 export interface GridLineData {
   id: string;
   orientation: "vertical" | "horizontal";
@@ -75,6 +84,7 @@ export interface ProjectData {
   gridSettings: GridSettings;
   lines: GridLineData[];
   freeLabels?: FreeLabelData[];
+  anchors?: AnchorData[];
   gridLabelPositions?: Record<string, { x: number; y: number }>;
   view: ViewState;
   canvasWidth: number;

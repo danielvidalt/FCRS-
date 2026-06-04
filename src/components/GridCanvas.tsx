@@ -18,6 +18,7 @@ import {
   type TPointerEventInfo,
 } from "fabric";
 import {
+  ANCHOR_KEY,
   applyGridLineStyle,
   buildGridLineObject,
   fabricObjectToLineData,
@@ -45,6 +46,7 @@ import {
 import { createInitialLines } from "@/lib/grid";
 import { insertPointOnLineAt } from "@/lib/line-points";
 import type {
+  AnchorData,
   FreeLabelData,
   GridLineData,
   GridSettings,
@@ -127,20 +129,26 @@ export interface GridCanvasHandle {
   refreshLabelAppearance: (settings: GridSettings) => void;
   getCanvasSize: () => { width: number; height: number };
   hasImage: () => boolean;
+  deleteAnchor: (id: string) => void;
+  updateAnchorMeta: (id: string, partial: Partial<Pick<AnchorData, "notes" | "photoDataUrl">>) => void;
+  selectAnchor: (id: string) => void;
 }
 
 interface GridCanvasProps {
   settings: GridSettings;
   panMode: boolean;
   moveGridMode: boolean;
-  onSelectionChange: (lineId: string | null, freeLabelId: string | null) => void;
+  anchorMode: boolean;
+  onSelectionChange: (lineId: string | null, freeLabelId: string | null, anchorId: string | null) => void;
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void;
   onSettingsChange: (settings: GridSettings) => void;
+  onAnchorsChange: (anchors: AnchorData[]) => void;
 }
 
 type HistoryEntry = {
   lines: GridLineData[];
   freeLabels: FreeLabelData[];
+  anchors: AnchorData[];
   view: ViewState;
   hiddenLabelKeys: Record<string, boolean>;
 };
@@ -152,9 +160,11 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       settings,
       panMode,
       moveGridMode,
+      anchorMode,
       onSelectionChange,
       onHistoryChange,
       onSettingsChange,
+      onAnchorsChange,
     },
     ref
   ) {
@@ -170,6 +180,8 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
     );
     const historyRef = useRef<HistoryEntry[]>([]);
     const historyIndexRef = useRef(-1);
+    const anchorsMetaRef = useRef<Map<string, AnchorData>>(new Map());
+    const anchorCounterRef = useRef(0);
     const scaleBaselineRef = useRef<GridLineData[] | null>(null);
     const viewRef = useRef<ViewState>({ zoom: 1, panX: 0, panY: 0 });
     const isPanningRef = useRef(false);
@@ -178,12 +190,14 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onHistoryChangeRef = useRef(onHistoryChange);
     const onSettingsChangeRef = useRef(onSettingsChange);
+    const onAnchorsChangeRef = useRef(onAnchorsChange);
     const settingsRef = useRef(settings);
     const moveGridModeRef = useRef(moveGridMode);
     onSelectionChangeRef.current = onSelectionChange;
     moveGridModeRef.current = moveGridMode;
     onHistoryChangeRef.current = onHistoryChange;
     onSettingsChangeRef.current = onSettingsChange;
+    onAnchorsChangeRef.current = onAnchorsChange;
     settingsRef.current = settings;
 
     const updateSettingsRef = useCallback((next: GridSettings) => {
@@ -196,9 +210,11 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       if (!canvas) return;
       const lines = extractLines(canvas);
       const freeLabels = extractFreeLabels(canvas);
+      const anchors = extractAnchors(canvas);
       const entry: HistoryEntry = {
         lines,
         freeLabels,
+        anchors,
         view: { ...viewRef.current },
         hiddenLabelKeys: { ...settingsRef.current.hiddenLabelKeys },
       };
@@ -242,6 +258,18 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           x: obj.left ?? 0,
           y: obj.top ?? 0,
         });
+      });
+      return result;
+    };
+
+    const extractAnchors = (canvas: Canvas): AnchorData[] => {
+      const result: AnchorData[] = [];
+      canvas.getObjects().forEach((obj) => {
+        const id = (obj as FabricObject & Record<string, string>)[ANCHOR_KEY];
+        if (!id) return;
+        const meta = anchorsMetaRef.current.get(id);
+        if (!meta) return;
+        result.push({ ...meta, x: obj.left ?? meta.x, y: obj.top ?? meta.y });
       });
       return result;
     };
@@ -472,13 +500,53 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       []
     );
 
+    const renderAnchors = useCallback(
+      (canvas: Canvas, anchors: AnchorData[]) => {
+        canvas
+          .getObjects()
+          .filter((o) => !!(o as FabricObject & Record<string, string>)[ANCHOR_KEY])
+          .forEach((o) => canvas.remove(o));
+        anchorsMetaRef.current.clear();
+        let maxIndex = 0;
+        anchors.forEach((anchor) => {
+          anchorsMetaRef.current.set(anchor.id, anchor);
+          if (anchor.index > maxIndex) maxIndex = anchor.index;
+          const itext = new IText(`A-${anchor.index}`, {
+            fontSize: 11,
+            fontFamily: "system-ui, sans-serif",
+            fill: "#1e293b",
+            backgroundColor: "#f97316",
+            padding: 5,
+            left: anchor.x,
+            top: anchor.y,
+            selectable: true,
+            editable: false,
+            objectCaching: false,
+            hasControls: false,
+            lockScalingX: true,
+            lockScalingY: true,
+            lockRotation: true,
+          });
+          applyBackgroundPadding(itext);
+          itext.set({ [ANCHOR_KEY]: anchor.id } as Record<string, string>);
+          canvas.add(itext);
+          canvas.bringObjectToFront(itext);
+        });
+        anchorCounterRef.current = Math.max(anchorCounterRef.current, maxIndex);
+        canvas.renderAll();
+      },
+      []
+    );
+
     const renderLabelsRef = useRef(renderLabels);
     const renderFreeLabelsRef = useRef(renderFreeLabels);
+    const renderAnchorsRef = useRef(renderAnchors);
     const syncAllLabelsRef = useRef(syncAllLabels);
     const updateLineAndSyncLabelsRef = useRef(updateLineAndSyncLabels);
     const insertPointOnLineAtPointerRef = useRef(insertPointOnLineAtPointer);
     renderLabelsRef.current = renderLabels;
     renderFreeLabelsRef.current = renderFreeLabels;
+    renderAnchorsRef.current = renderAnchors;
     syncAllLabelsRef.current = syncAllLabels;
     updateLineAndSyncLabelsRef.current = updateLineAndSyncLabels;
     insertPointOnLineAtPointerRef.current = insertPointOnLineAtPointer;
@@ -517,19 +585,32 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       const onModified = (e?: { target?: FabricObject }) => {
         const target = e?.target ?? canvas.getActiveObject();
         if (target instanceof Text) {
-          const freeId = (target as Text & Record<string, string>)[FREE_LABEL_KEY];
-          if (freeId) {
-            const existing = freeLabelsMetaRef.current.get(freeId);
-            freeLabelsMetaRef.current.set(freeId, {
-              ...existing,
-              id: freeId,
-              text: (target as IText).text ?? "",
-              x: target.left ?? 0,
-              y: target.top ?? 0,
-            });
+          const anchorId = (target as Text & Record<string, string>)[ANCHOR_KEY];
+          if (anchorId) {
+            const existing = anchorsMetaRef.current.get(anchorId);
+            if (existing) {
+              anchorsMetaRef.current.set(anchorId, {
+                ...existing,
+                x: target.left ?? existing.x,
+                y: target.top ?? existing.y,
+              });
+              onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+            }
           } else {
-            const key = (target as Text & Record<string, string>)[LABEL_KEY];
-            if (key) rememberLabelPosition(target, manualLabelPositionsRef.current);
+            const freeId = (target as Text & Record<string, string>)[FREE_LABEL_KEY];
+            if (freeId) {
+              const existing = freeLabelsMetaRef.current.get(freeId);
+              freeLabelsMetaRef.current.set(freeId, {
+                ...existing,
+                id: freeId,
+                text: (target as IText).text ?? "",
+                x: target.left ?? 0,
+                y: target.top ?? 0,
+              });
+            } else {
+              const key = (target as Text & Record<string, string>)[LABEL_KEY];
+              if (key) rememberLabelPosition(target, manualLabelPositionsRef.current);
+            }
           }
         } else if (target && isGridLineObject(target)) {
           updateLineAndSyncLabelsRef.current(target);
@@ -609,13 +690,25 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           const id = getGridLineId(target);
           canvas.discardActiveObject();
           deleteLineById(id);
-          onSelectionChangeRef.current(null, null);
+          onSelectionChangeRef.current(null, null, null);
           canvas.requestRenderAll();
           pushHistory();
           return;
         }
 
         if (target instanceof Text) {
+          const anchorId = (target as Text & Record<string, string>)[ANCHOR_KEY];
+          if (anchorId) {
+            event.preventDefault();
+            anchorsMetaRef.current.delete(anchorId);
+            canvas.remove(target);
+            canvas.discardActiveObject();
+            onSelectionChangeRef.current(null, null, null);
+            canvas.requestRenderAll();
+            onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+            pushHistory();
+            return;
+          }
           const freeId = (target as Text & Record<string, string>)[FREE_LABEL_KEY];
           if (freeId) {
             event.preventDefault();
@@ -648,14 +741,16 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         const rec = obj as (FabricObject & Record<string, string>) | undefined;
         const lineId = rec?.[GRID_LINE_KEY];
         const freeId = rec?.[FREE_LABEL_KEY];
+        const anchorId = rec?.[ANCHOR_KEY];
         onSelectionChangeRef.current(
           typeof lineId === "string" ? lineId : null,
           typeof freeId === "string" ? freeId : null,
+          typeof anchorId === "string" ? anchorId : null,
         );
       };
       canvas.on("selection:created", fireSelection);
       canvas.on("selection:updated", fireSelection);
-      canvas.on("selection:cleared", () => onSelectionChangeRef.current(null, null));
+      canvas.on("selection:cleared", () => onSelectionChangeRef.current(null, null, null));
 
       const onWheel = (opt: TPointerEventInfo<WheelEvent>) => {
         const e = opt.e;
@@ -834,6 +929,62 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       };
     }, [moveGridMode, panMode]);
 
+    // Anchor placement mode: click on empty canvas to drop an anchor marker.
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || !anchorMode) return;
+
+      canvas.selection = false;
+      canvas.defaultCursor = "crosshair";
+
+      const onDown = (opt: TPointerEventInfo) => {
+        if (opt.target) return; // let existing object selection handle clicks on objects
+        const point = opt.scenePoint;
+        if (!point) return;
+        anchorCounterRef.current += 1;
+        const id = `anchor-${Math.random().toString(36).slice(2, 10)}`;
+        const anchor: AnchorData = {
+          id,
+          index: anchorCounterRef.current,
+          x: point.x,
+          y: point.y,
+          notes: "",
+        };
+        anchorsMetaRef.current.set(id, anchor);
+        const itext = new IText(`A-${anchor.index}`, {
+          fontSize: 11,
+          fontFamily: "system-ui, sans-serif",
+          fill: "#1e293b",
+          backgroundColor: "#f97316",
+          padding: 5,
+          left: anchor.x,
+          top: anchor.y,
+          selectable: true,
+          editable: false,
+          objectCaching: false,
+          hasControls: false,
+          lockScalingX: true,
+          lockScalingY: true,
+          lockRotation: true,
+        });
+        applyBackgroundPadding(itext);
+        itext.set({ [ANCHOR_KEY]: id } as Record<string, string>);
+        canvas.add(itext);
+        canvas.bringObjectToFront(itext);
+        canvas.setActiveObject(itext);
+        canvas.renderAll();
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+        pushHistory();
+      };
+
+      canvas.on("mouse:down", onDown);
+      return () => {
+        canvas.off("mouse:down", onDown);
+        canvas.selection = !panMode;
+        canvas.defaultCursor = panMode ? "grab" : "default";
+      };
+    }, [anchorMode, panMode, pushHistory]);
+
     useImperativeHandle(ref, () => ({
       hasImage: () => !!imageRef.current,
       getCanvasSize: () => {
@@ -871,9 +1022,12 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           .forEach((o) => canvas.remove(o));
         linesMetaRef.current.clear();
         freeLabelsMetaRef.current.clear();
+        anchorsMetaRef.current.clear();
+        anchorCounterRef.current = 0;
         manualLabelPositionsRef.current.clear();
         canvas.discardActiveObject();
         canvas.requestRenderAll();
+        onAnchorsChangeRef.current([]);
         pushHistory();
       },
 
@@ -898,7 +1052,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         linesMetaRef.current.clear();
         manualLabelPositionsRef.current.clear();
         canvas.discardActiveObject();
-        onSelectionChangeRef.current(null, null);
+        onSelectionChangeRef.current(null, null, null);
         canvas.requestRenderAll();
         pushHistory();
       },
@@ -914,6 +1068,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           gridSettings,
           lines: extractLines(canvas),
           freeLabels: extractFreeLabels(canvas),
+          anchors: extractAnchors(canvas),
           gridLabelPositions: Object.fromEntries(manualLabelPositionsRef.current),
           view: { ...viewRef.current },
           canvasWidth: canvas.getWidth(),
@@ -950,9 +1105,12 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           }
         }
 
+        anchorCounterRef.current = 0;
         renderLines(canvas, project.lines, gridSettings);
         renderLabels(canvas, gridSettings);
         renderFreeLabels(canvas, project.freeLabels ?? [], gridSettings);
+        renderAnchors(canvas, project.anchors ?? []);
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         applyView(project.view);
         pushHistory();
       },
@@ -995,6 +1153,8 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLines(canvas, entry.lines, nextSettings);
         renderLabelsRef.current(canvas, nextSettings);
         renderFreeLabelsRef.current(canvas, entry.freeLabels ?? [], nextSettings);
+        renderAnchorsRef.current(canvas, entry.anchors ?? []);
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         applyView(entry.view);
         onHistoryChange(historyIndexRef.current > 0, true);
       },
@@ -1014,6 +1174,8 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLines(canvas, entry.lines, nextSettings);
         renderLabelsRef.current(canvas, nextSettings);
         renderFreeLabelsRef.current(canvas, entry.freeLabels ?? [], nextSettings);
+        renderAnchorsRef.current(canvas, entry.anchors ?? []);
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         applyView(entry.view);
         onHistoryChange(
           historyIndexRef.current > 0,
@@ -1193,7 +1355,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         canvas.discardActiveObject();
         canvas.remove(obj);
         linesMetaRef.current.delete(id);
-        onSelectionChangeRef.current(null, null);
+        onSelectionChangeRef.current(null, null, null);
         canvas.requestRenderAll();
         pushHistory();
       },
@@ -1231,7 +1393,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLabelsRef.current(canvas, settingsRef.current);
         renderFreeLabelsRef.current(canvas, [...freeLabelsMetaRef.current.values()], settingsRef.current);
         canvas.discardActiveObject();
-        onSelectionChangeRef.current(null, null);
+        onSelectionChangeRef.current(null, null, null);
       },
 
       commitGridScale: () => {
@@ -1269,7 +1431,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLabelsRef.current(canvas, settingsRef.current);
         renderFreeLabelsRef.current(canvas, [...freeLabelsMetaRef.current.values()], settingsRef.current);
         canvas.discardActiveObject();
-        onSelectionChangeRef.current(null, null);
+        onSelectionChangeRef.current(null, null, null);
         canvas.requestRenderAll();
         pushHistory();
       },
@@ -1296,6 +1458,39 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         const canvas = canvasRef.current;
         if (!canvas) return;
         syncAllLabels(canvas, gridSettings);
+      },
+
+      deleteAnchor: (id: string) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const obj = canvas
+          .getObjects()
+          .find((o) => (o as FabricObject & Record<string, string>)[ANCHOR_KEY] === id);
+        if (obj) canvas.remove(obj);
+        anchorsMetaRef.current.delete(id);
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+        pushHistory();
+      },
+
+      updateAnchorMeta: (id: string, partial: Partial<Pick<AnchorData, "notes" | "photoDataUrl">>) => {
+        const existing = anchorsMetaRef.current.get(id);
+        if (!existing) return;
+        anchorsMetaRef.current.set(id, { ...existing, ...partial });
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+      },
+
+      selectAnchor: (id: string) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const obj = canvas
+          .getObjects()
+          .find((o) => (o as FabricObject & Record<string, string>)[ANCHOR_KEY] === id);
+        if (obj) {
+          canvas.setActiveObject(obj);
+          canvas.requestRenderAll();
+        }
       },
     }));
 

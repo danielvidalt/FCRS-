@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { numberingHint } from "@/lib/grid";
-import type { FreeLabelData, GridSettings } from "@/types/grid";
+import type { AnchorData, FreeLabelData, GridSettings } from "@/types/grid";
 
 interface RightSidebarProps {
   settings: GridSettings;
@@ -10,6 +10,9 @@ interface RightSidebarProps {
   selectedFreeLabelStyle: FreeLabelData | null;
   hasImage: boolean;
   moveGridMode: boolean;
+  anchorMode: boolean;
+  anchors: AnchorData[];
+  selectedAnchorId: string | null;
   onChange: (settings: GridSettings) => void;
   onGenerate: () => void;
   onResetGrid: () => void;
@@ -27,6 +30,11 @@ interface RightSidebarProps {
   onRemoveControlPoint: () => void;
   onToggleLock: () => void;
   onDeleteLine: () => void;
+  onToggleAnchorMode: () => void;
+  onSelectAnchor: (id: string) => void;
+  onUpdateAnchorNotes: (id: string, notes: string) => void;
+  onUpdateAnchorPhoto: (id: string, dataUrl: string | undefined) => void;
+  onDeleteAnchor: (id: string) => void;
 }
 
 export default function RightSidebar({
@@ -35,6 +43,9 @@ export default function RightSidebar({
   selectedFreeLabelStyle,
   hasImage,
   moveGridMode,
+  anchorMode,
+  anchors,
+  selectedAnchorId,
   onChange,
   onGenerate,
   onResetGrid,
@@ -52,6 +63,11 @@ export default function RightSidebar({
   onRemoveControlPoint,
   onToggleLock,
   onDeleteLine,
+  onToggleAnchorMode,
+  onSelectAnchor,
+  onUpdateAnchorNotes,
+  onUpdateAnchorPhoto,
+  onDeleteAnchor,
 }: RightSidebarProps) {
   const [scaleX, setScaleX] = useState(100);
   const [scaleY, setScaleY] = useState(100);
@@ -546,6 +562,18 @@ export default function RightSidebar({
         </div>
       )}
 
+      <AnchorSection
+        anchors={anchors}
+        selectedAnchorId={selectedAnchorId}
+        anchorMode={anchorMode}
+        hasImage={hasImage}
+        onToggleMode={onToggleAnchorMode}
+        onSelect={onSelectAnchor}
+        onUpdateNotes={onUpdateAnchorNotes}
+        onUpdatePhoto={onUpdateAnchorPhoto}
+        onDelete={onDeleteAnchor}
+      />
+
     </aside>
   );
 }
@@ -691,6 +719,163 @@ function HorizontalLabelCross({ showLeft, showRight, side, onToggleLeft, onToggl
       <div />
       <Radio  active={side === "bottom"} title="Below line" label="▼" onClick={() => onSelectSide("bottom")} />
       <div />
+    </div>
+  );
+}
+
+function AnchorSection({
+  anchors,
+  selectedAnchorId,
+  anchorMode,
+  hasImage,
+  onToggleMode,
+  onSelect,
+  onUpdateNotes,
+  onUpdatePhoto,
+  onDelete,
+}: {
+  anchors: AnchorData[];
+  selectedAnchorId: string | null;
+  anchorMode: boolean;
+  hasImage: boolean;
+  onToggleMode: () => void;
+  onSelect: (id: string) => void;
+  onUpdateNotes: (id: string, notes: string) => void;
+  onUpdatePhoto: (id: string, dataUrl: string | undefined) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const selectedAnchor = anchors.find((a) => a.id === selectedAnchorId) ?? null;
+
+  return (
+    <div className="border-t border-slate-800 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between text-xs font-semibold uppercase text-slate-500"
+      >
+        <span className="flex items-center gap-2">
+          Anchors
+          {anchors.length > 0 && (
+            <span className="rounded bg-orange-900/60 px-1.5 py-0.5 text-orange-300">
+              {anchors.length}
+            </span>
+          )}
+        </span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          <button
+            type="button"
+            disabled={!hasImage}
+            onClick={onToggleMode}
+            className={`w-full rounded-md px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              anchorMode
+                ? "bg-orange-600 text-white hover:bg-orange-500"
+                : "border border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+            }`}
+          >
+            {anchorMode ? "Placing anchors — click to stop" : "Place anchor"}
+          </button>
+
+          {anchors.length > 0 && (
+            <ul className="space-y-1">
+              {anchors.map((anchor) => (
+                <li
+                  key={anchor.id}
+                  onClick={() => onSelect(anchor.id)}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition ${
+                    selectedAnchorId === anchor.id
+                      ? "bg-orange-900/50 text-orange-200 ring-1 ring-orange-700"
+                      : "bg-slate-800/50 text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-orange-500 text-[10px] font-bold text-slate-900">
+                    {anchor.index}
+                  </span>
+                  <span className="flex-1 truncate text-xs">
+                    {anchor.notes ? (
+                      anchor.notes
+                    ) : (
+                      <span className="text-slate-500">No notes</span>
+                    )}
+                  </span>
+                  {anchor.photoDataUrl && (
+                    <span className="text-xs text-orange-400">📷</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {selectedAnchor && (
+            <div className="space-y-2 rounded-md border border-orange-800/40 bg-orange-950/20 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-orange-300">
+                  A-{selectedAnchor.index}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(selectedAnchor.id)}
+                  className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/40"
+                >
+                  Delete
+                </button>
+              </div>
+              <label className="block space-y-1">
+                <span className="text-xs text-slate-400">Notes</span>
+                <textarea
+                  value={selectedAnchor.notes}
+                  onChange={(e) => onUpdateNotes(selectedAnchor.id, e.target.value)}
+                  rows={3}
+                  className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-orange-600 focus:outline-none"
+                  placeholder="Inspection notes…"
+                />
+              </label>
+              <div className="space-y-1">
+                <span className="text-xs text-slate-400">Photo</span>
+                {selectedAnchor.photoDataUrl ? (
+                  <div className="space-y-1">
+                    <img
+                      src={selectedAnchor.photoDataUrl}
+                      alt={`Anchor A-${selectedAnchor.index}`}
+                      className="w-full rounded-md object-cover"
+                      style={{ maxHeight: 120 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onUpdatePhoto(selectedAnchor.id, undefined)}
+                      className="w-full rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-400 hover:bg-slate-700"
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed border-slate-700 bg-slate-900 px-3 py-3 text-xs text-slate-500 hover:border-orange-700 hover:text-orange-400">
+                    <span>Click to add photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () =>
+                          onUpdatePhoto(selectedAnchor.id, reader.result as string);
+                        reader.readAsDataURL(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
