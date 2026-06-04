@@ -914,6 +914,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           gridSettings,
           lines: extractLines(canvas),
           freeLabels: extractFreeLabels(canvas),
+          gridLabelPositions: Object.fromEntries(manualLabelPositionsRef.current),
           view: { ...viewRef.current },
           canvasWidth: canvas.getWidth(),
           canvasHeight: canvas.getHeight(),
@@ -939,7 +940,16 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           ...settingsRef.current,
           ...project.gridSettings,
         };
-        project.lines.forEach((l) => linesMetaRef.current.set(l.id, l));
+
+        // Restore per-tab manual label positions so labels from one tab
+        // never contaminate another tab's layout.
+        manualLabelPositionsRef.current.clear();
+        if (project.gridLabelPositions) {
+          for (const [key, pos] of Object.entries(project.gridLabelPositions)) {
+            manualLabelPositionsRef.current.set(key, pos);
+          }
+        }
+
         renderLines(canvas, project.lines, gridSettings);
         renderLabels(canvas, gridSettings);
         renderFreeLabels(canvas, project.freeLabels ?? [], gridSettings);

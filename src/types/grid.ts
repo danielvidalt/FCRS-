@@ -75,6 +75,7 @@ export interface ProjectData {
   gridSettings: GridSettings;
   lines: GridLineData[];
   freeLabels?: FreeLabelData[];
+  gridLabelPositions?: Record<string, { x: number; y: number }>;
   view: ViewState;
   canvasWidth: number;
   canvasHeight: number;
