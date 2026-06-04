@@ -722,6 +722,9 @@ export default function FacadeGridMapper() {
           setSelectedAnchorId(id);
           canvasRef.current?.selectAnchor(id);
         }}
+        onUpdateAnchorNotes={(id, notes) =>
+          canvasRef.current?.updateAnchorNotes(id, notes)
+        }
         onDeleteAnchor={(id) => {
           canvasRef.current?.deleteAnchor(id);
           if (selectedAnchorId === id) setSelectedAnchorId(null);

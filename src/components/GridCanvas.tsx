@@ -130,6 +130,7 @@ export interface GridCanvasHandle {
   getCanvasSize: () => { width: number; height: number };
   hasImage: () => boolean;
   deleteAnchor: (id: string) => void;
+  updateAnchorNotes: (id: string, notes: string) => void;
   selectAnchor: (id: string) => void;
 }
 
@@ -507,7 +508,10 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         anchors.forEach((anchor) => {
           anchorsMetaRef.current.set(anchor.id, anchor);
           if (anchor.index > maxIndex) maxIndex = anchor.index;
-          const itext = new IText(`A-${anchor.index}`, {
+          const displayText = anchor.notes
+            ? `A-${anchor.index} — ${anchor.notes}`
+            : `A-${anchor.index}`;
+          const itext = new IText(displayText, {
             fontSize: 11,
             fontFamily: "system-ui, sans-serif",
             fill: "#1e293b",
@@ -516,7 +520,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
             left: anchor.x,
             top: anchor.y,
             selectable: true,
-            editable: false,
+            editable: true,
             objectCaching: false,
             hasControls: false,
             lockScalingX: true,
@@ -637,6 +641,29 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
 
       // Save label text + position when inline editing exits.
       canvas.on("text:editing:exited", ({ target }) => {
+        const anchorId = (target as IText & Record<string, string>)[ANCHOR_KEY];
+        if (anchorId) {
+          const existing = anchorsMetaRef.current.get(anchorId);
+          if (existing) {
+            // Parse notes from edited text: everything after "A-N — " or "A-N"
+            const full = target.text ?? `A-${existing.index}`;
+            const prefix = `A-${existing.index} — `;
+            const notes = full.startsWith(prefix)
+              ? full.slice(prefix.length)
+              : full === `A-${existing.index}`
+              ? ""
+              : full;
+            anchorsMetaRef.current.set(anchorId, {
+              ...existing,
+              notes,
+              x: target.left ?? existing.x,
+              y: target.top ?? existing.y,
+            });
+            onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+          }
+          pushHistory();
+          return;
+        }
         const freeId = (target as IText & Record<string, string>)[FREE_LABEL_KEY];
         if (freeId) {
           const existing = freeLabelsMetaRef.current.get(freeId);
@@ -944,6 +971,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           index: anchorCounterRef.current,
           x: point.x,
           y: point.y,
+          notes: "",
         };
         anchorsMetaRef.current.set(id, anchor);
         const itext = new IText(`A-${anchor.index}`, {
@@ -955,7 +983,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           left: anchor.x,
           top: anchor.y,
           selectable: true,
-          editable: false,
+          editable: true,
           objectCaching: false,
           hasControls: false,
           lockScalingX: true,
@@ -1462,6 +1490,27 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         canvas.requestRenderAll();
         onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         pushHistory();
+      },
+
+      updateAnchorNotes: (id: string, notes: string) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const existing = anchorsMetaRef.current.get(id);
+        if (!existing) return;
+        anchorsMetaRef.current.set(id, { ...existing, notes });
+        const obj = canvas
+          .getObjects()
+          .find((o) => (o as FabricObject & Record<string, string>)[ANCHOR_KEY] === id);
+        if (obj instanceof IText) {
+          const displayText = notes
+            ? `A-${existing.index} — ${notes}`
+            : `A-${existing.index}`;
+          obj.set({ text: displayText });
+          applyBackgroundPadding(obj);
+          obj.setCoords();
+          canvas.requestRenderAll();
+        }
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
       },
 
       selectAnchor: (id: string) => {
