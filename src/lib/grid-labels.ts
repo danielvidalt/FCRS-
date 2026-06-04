@@ -1,8 +1,36 @@
-import { Text, type Canvas } from "fabric";
+import { Text, type Canvas, type FabricObject } from "fabric";
 import { horizontalLabel, verticalLabel } from "@/lib/grid";
 import type { FreeLabelData, GridLineData, GridSettings } from "@/types/grid";
 
 export const LABEL_KEY = "gridLabelId";
+
+type RenderCtx = CanvasRenderingContext2D;
+type PatchedObj = FabricObject & {
+  _getNonTransformedDimensions(): { x: number; y: number };
+  _removeShadow(ctx: RenderCtx): void;
+  backgroundColor: string;
+  padding: number;
+};
+
+/**
+ * Fabric.js _renderBackground ignores the padding property, drawing the background
+ * flush with the text bounding box. This override extends the rect by `padding` on
+ * every side — matching the selection box behaviour — so the last character is
+ * never visually clipped by the background.
+ */
+export function applyBackgroundPadding(text: Text): void {
+  (text as unknown as PatchedObj)._renderBackground = function (
+    this: PatchedObj,
+    ctx: RenderCtx
+  ) {
+    if (!this.backgroundColor) return;
+    const dim = this._getNonTransformedDimensions();
+    const pad = this.padding || 0;
+    ctx.fillStyle = this.backgroundColor;
+    ctx.fillRect(-dim.x / 2 - pad, -dim.y / 2 - pad, dim.x + 2 * pad, dim.y + 2 * pad);
+    this._removeShadow(ctx);
+  };
+}
 
 export type LabelPlacement = "top" | "bottom" | "left" | "right";
 

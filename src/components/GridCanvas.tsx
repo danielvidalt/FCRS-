@@ -28,6 +28,7 @@ import {
   replaceGridLine,
 } from "@/lib/fabric-grid";
 import {
+  applyBackgroundPadding,
   countLinesByOrientation,
   defaultLabelPosition,
   fabricLabelStyle,
@@ -342,6 +343,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
               ),
               { ...style, left: pos.x, top: pos.y }
             );
+            applyBackgroundPadding(text);
             attachLabel(text, key);
             canvas.add(text);
             canvas.bringObjectToFront(text);
@@ -460,6 +462,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
             left: label.x,
             top: label.y,
           });
+          applyBackgroundPadding(itext);
           itext.set({ [FREE_LABEL_KEY]: label.id } as Record<string, string>);
           canvas.add(itext);
           canvas.bringObjectToFront(itext);
@@ -1137,6 +1140,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           left: x,
           top: y,
         });
+        applyBackgroundPadding(itext);
         itext.set({ [FREE_LABEL_KEY]: id } as Record<string, string>);
         freeLabelsMetaRef.current.set(id, labelMeta);
         canvas.add(itext);
