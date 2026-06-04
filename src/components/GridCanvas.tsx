@@ -48,6 +48,7 @@ import { createInitialLines } from "@/lib/grid";
 import { insertPointOnLineAt } from "@/lib/line-points";
 import type {
   AnchorData,
+  AnchorMarkerType,
   FreeLabelData,
   GridLineData,
   GridSettings,
@@ -98,6 +99,66 @@ function setCanvasImage(
   canvas.sendObjectToBack(img);
 }
 
+const MARKER_CHARS: Record<Exclude<AnchorMarkerType, "label">, string> = {
+  x: "✕",
+  circle: "●",
+  square: "■",
+};
+
+function buildAnchorBadge(anchor: AnchorData): IText {
+  const base = {
+    left: anchor.x,
+    top: anchor.y,
+    fontFamily: "system-ui, sans-serif",
+    selectable: true,
+    editable: false,
+    objectCaching: false,
+    hasControls: false,
+    lockScalingX: true,
+    lockScalingY: true,
+    lockRotation: true,
+  };
+  if (anchor.markerType === "label") {
+    const badge = new IText(`A-${anchor.index}`, {
+      ...base,
+      fontSize: anchor.markerSize,
+      fill: "#1e293b",
+      backgroundColor: anchor.markerColor,
+      padding: 5,
+    });
+    applyBackgroundPadding(badge);
+    return badge;
+  }
+  return new IText(MARKER_CHARS[anchor.markerType], {
+    ...base,
+    fontSize: anchor.markerSize,
+    fill: anchor.markerColor,
+    backgroundColor: "",
+    padding: 3,
+  });
+}
+
+function buildAnchorNotesText(anchor: AnchorData): IText {
+  const notesText = new IText(anchor.notes, {
+    fontSize: anchor.notesSize,
+    fontFamily: "system-ui, sans-serif",
+    fill: anchor.notesColor,
+    backgroundColor: "rgba(15, 23, 42, 0.88)",
+    padding: 5,
+    left: anchor.notesX ?? anchor.x + 30,
+    top: anchor.notesY ?? anchor.y,
+    selectable: true,
+    editable: true,
+    objectCaching: false,
+    hasControls: false,
+    lockScalingX: true,
+    lockScalingY: true,
+    lockRotation: true,
+  });
+  applyBackgroundPadding(notesText);
+  return notesText;
+}
+
 export interface GridCanvasHandle {
   loadImage: (file: File) => Promise<void>;
   generateGrid: (settings: GridSettings) => void;
@@ -132,6 +193,7 @@ export interface GridCanvasHandle {
   hasImage: () => boolean;
   deleteAnchor: (id: string) => void;
   updateAnchorNotes: (id: string, notes: string) => void;
+  updateAnchorMarker: (id: string, partial: Partial<Pick<AnchorData, "markerType" | "markerSize" | "markerColor" | "notesSize" | "notesColor">>) => void;
   selectAnchor: (id: string) => void;
 }
 
@@ -140,6 +202,9 @@ interface GridCanvasProps {
   panMode: boolean;
   moveGridMode: boolean;
   anchorMode: boolean;
+  activeAnchorType: AnchorMarkerType;
+  activeAnchorSize: number;
+  activeAnchorColor: string;
   onSelectionChange: (lineId: string | null, freeLabelId: string | null, anchorId: string | null) => void;
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void;
   onSettingsChange: (settings: GridSettings) => void;
@@ -161,6 +226,9 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       panMode,
       moveGridMode,
       anchorMode,
+      activeAnchorType,
+      activeAnchorSize,
+      activeAnchorColor,
       onSelectionChange,
       onHistoryChange,
       onSettingsChange,
@@ -182,6 +250,12 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
     const historyIndexRef = useRef(-1);
     const anchorsMetaRef = useRef<Map<string, AnchorData>>(new Map());
     const anchorCounterRef = useRef(0);
+    const activeAnchorTypeRef = useRef<AnchorMarkerType>(activeAnchorType);
+    const activeAnchorSizeRef = useRef(activeAnchorSize);
+    const activeAnchorColorRef = useRef(activeAnchorColor);
+    activeAnchorTypeRef.current = activeAnchorType;
+    activeAnchorSizeRef.current = activeAnchorSize;
+    activeAnchorColorRef.current = activeAnchorColor;
     const scaleBaselineRef = useRef<GridLineData[] | null>(null);
     const viewRef = useRef<ViewState>({ zoom: 1, panX: 0, panY: 0 });
     const isPanningRef = useRef(false);
@@ -513,49 +587,13 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           anchorsMetaRef.current.set(anchor.id, anchor);
           if (anchor.index > maxIndex) maxIndex = anchor.index;
 
-          // Badge — non-editable orange marker
-          const badge = new IText(`A-${anchor.index}`, {
-            fontSize: 11,
-            fontFamily: "system-ui, sans-serif",
-            fill: "#1e293b",
-            backgroundColor: "#f97316",
-            padding: 5,
-            left: anchor.x,
-            top: anchor.y,
-            selectable: true,
-            editable: false,
-            objectCaching: false,
-            hasControls: false,
-            lockScalingX: true,
-            lockScalingY: true,
-            lockRotation: true,
-          });
-          applyBackgroundPadding(badge);
+          const badge = buildAnchorBadge(anchor);
           badge.set({ [ANCHOR_KEY]: anchor.id } as Record<string, string>);
           canvas.add(badge);
           canvas.bringObjectToFront(badge);
 
-          // Notes — separate editable label, only if non-empty
           if (anchor.notes) {
-            const notesX = anchor.notesX ?? anchor.x + 30;
-            const notesY = anchor.notesY ?? anchor.y;
-            const notesText = new IText(anchor.notes, {
-              fontSize: 11,
-              fontFamily: "system-ui, sans-serif",
-              fill: "#fdba74",
-              backgroundColor: "rgba(15, 23, 42, 0.88)",
-              padding: 5,
-              left: notesX,
-              top: notesY,
-              selectable: true,
-              editable: true,
-              objectCaching: false,
-              hasControls: false,
-              lockScalingX: true,
-              lockScalingY: true,
-              lockRotation: true,
-            });
-            applyBackgroundPadding(notesText);
+            const notesText = buildAnchorNotesText(anchor);
             notesText.set({ [ANCHOR_NOTES_KEY]: anchor.id } as Record<string, string>);
             canvas.add(notesText);
             canvas.bringObjectToFront(notesText);
@@ -1030,29 +1068,18 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           x: point.x,
           y: point.y,
           notes: "",
+          markerType: activeAnchorTypeRef.current,
+          markerSize: activeAnchorSizeRef.current,
+          markerColor: activeAnchorColorRef.current,
+          notesSize: 11,
+          notesColor: "#fdba74",
         };
         anchorsMetaRef.current.set(id, anchor);
-        const itext = new IText(`A-${anchor.index}`, {
-          fontSize: 11,
-          fontFamily: "system-ui, sans-serif",
-          fill: "#1e293b",
-          backgroundColor: "#f97316",
-          padding: 5,
-          left: anchor.x,
-          top: anchor.y,
-          selectable: true,
-          editable: true,
-          objectCaching: false,
-          hasControls: false,
-          lockScalingX: true,
-          lockScalingY: true,
-          lockRotation: true,
-        });
-        applyBackgroundPadding(itext);
-        itext.set({ [ANCHOR_KEY]: id } as Record<string, string>);
-        canvas.add(itext);
-        canvas.bringObjectToFront(itext);
-        canvas.setActiveObject(itext);
+        const badge = buildAnchorBadge(anchor);
+        badge.set({ [ANCHOR_KEY]: id } as Record<string, string>);
+        canvas.add(badge);
+        canvas.bringObjectToFront(badge);
+        canvas.setActiveObject(badge);
         canvas.renderAll();
         onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         pushHistory();
@@ -1564,40 +1591,62 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         if (!canvas) return;
         const existing = anchorsMetaRef.current.get(id);
         if (!existing) return;
-        anchorsMetaRef.current.set(id, { ...existing, notes });
-
-        // Remove any existing notes label
+        const updated = { ...existing, notes };
+        anchorsMetaRef.current.set(id, updated);
         const existingNotesObj = canvas.getObjects().find(
           (o) => (o as FabricObject & Record<string, string>)[ANCHOR_NOTES_KEY] === id
         );
         if (existingNotesObj) canvas.remove(existingNotesObj);
-
-        // Create a fresh notes label if notes is non-empty
         if (notes) {
-          const anchor = anchorsMetaRef.current.get(id)!;
-          const notesX = anchor.notesX ?? anchor.x + 30;
-          const notesY = anchor.notesY ?? anchor.y;
-          const notesText = new IText(notes, {
-            fontSize: 11,
-            fontFamily: "system-ui, sans-serif",
-            fill: "#fdba74",
-            backgroundColor: "rgba(15, 23, 42, 0.88)",
-            padding: 5,
-            left: notesX,
-            top: notesY,
-            selectable: true,
-            editable: true,
-            objectCaching: false,
-            hasControls: false,
-            lockScalingX: true,
-            lockScalingY: true,
-            lockRotation: true,
-          });
-          applyBackgroundPadding(notesText);
+          const notesText = buildAnchorNotesText(updated);
           notesText.set({ [ANCHOR_NOTES_KEY]: id } as Record<string, string>);
           canvas.add(notesText);
           canvas.bringObjectToFront(notesText);
         }
+        canvas.requestRenderAll();
+        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+      },
+
+      updateAnchorMarker: (id: string, partial: Partial<Pick<AnchorData, "markerType" | "markerSize" | "markerColor" | "notesSize" | "notesColor">>) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const existing = anchorsMetaRef.current.get(id);
+        if (!existing) return;
+        const updated = { ...existing, ...partial };
+        anchorsMetaRef.current.set(id, updated);
+
+        // Rebuild badge if marker style changed
+        if ("markerType" in partial || "markerSize" in partial || "markerColor" in partial) {
+          const badgeObj = canvas.getObjects().find(
+            (o) => (o as FabricObject & Record<string, string>)[ANCHOR_KEY] === id
+          );
+          if (badgeObj) {
+            canvas.remove(badgeObj);
+            const newBadge = buildAnchorBadge(updated);
+            newBadge.set({ [ANCHOR_KEY]: id } as Record<string, string>);
+            canvas.add(newBadge);
+            canvas.bringObjectToFront(newBadge);
+            canvas.setActiveObject(newBadge);
+          }
+        }
+
+        // Rebuild notes label if notes style changed
+        if (("notesSize" in partial || "notesColor" in partial) && updated.notes) {
+          const notesObj = canvas.getObjects().find(
+            (o) => (o as FabricObject & Record<string, string>)[ANCHOR_NOTES_KEY] === id
+          );
+          const pos = notesObj
+            ? { notesX: notesObj.left ?? updated.notesX, notesY: notesObj.top ?? updated.notesY }
+            : {};
+          if (notesObj) canvas.remove(notesObj);
+          const withPos = { ...updated, ...pos };
+          anchorsMetaRef.current.set(id, withPos);
+          const newNotes = buildAnchorNotesText(withPos);
+          newNotes.set({ [ANCHOR_NOTES_KEY]: id } as Record<string, string>);
+          canvas.add(newNotes);
+          canvas.bringObjectToFront(newNotes);
+        }
+
         canvas.requestRenderAll();
         onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
       },

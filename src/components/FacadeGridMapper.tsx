@@ -17,6 +17,7 @@ import { isValidImageFile } from "@/lib/image-upload";
 import {
   DEFAULT_GRID_SETTINGS,
   type AnchorData,
+  type AnchorMarkerType,
   type FreeLabelData,
   type GridSettings,
   type MultiFacadeProjectData,
@@ -165,6 +166,9 @@ export default function FacadeGridMapper() {
   const [anchorMode, setAnchorMode] = useState(false);
   const [selectedAnchorId, setSelectedAnchorId] = useState<string | null>(null);
   const [anchors, setAnchors] = useState<AnchorData[]>([]);
+  const [activeAnchorType, setActiveAnchorType] = useState<AnchorMarkerType>("label");
+  const [activeAnchorSize, setActiveAnchorSize] = useState(16);
+  const [activeAnchorColor, setActiveAnchorColor] = useState("#f97316");
 
   const flash = useCallback((message: string) => {
     setStatus(message);
@@ -642,6 +646,9 @@ export default function FacadeGridMapper() {
             panMode={panMode}
             moveGridMode={moveGridMode}
             anchorMode={anchorMode}
+            activeAnchorType={activeAnchorType}
+            activeAnchorSize={activeAnchorSize}
+            activeAnchorColor={activeAnchorColor}
             onAnchorsChange={setAnchors}
             onSelectionChange={(lineId, freeLabelId, anchorId) => {
               setSelectedLineId(lineId);
@@ -725,6 +732,15 @@ export default function FacadeGridMapper() {
         onUpdateAnchorNotes={(id, notes) =>
           canvasRef.current?.updateAnchorNotes(id, notes)
         }
+        onUpdateAnchorMarker={(id, partial) =>
+          canvasRef.current?.updateAnchorMarker(id, partial)
+        }
+        activeAnchorType={activeAnchorType}
+        activeAnchorSize={activeAnchorSize}
+        activeAnchorColor={activeAnchorColor}
+        onChangeActiveAnchorType={setActiveAnchorType}
+        onChangeActiveAnchorSize={setActiveAnchorSize}
+        onChangeActiveAnchorColor={setActiveAnchorColor}
         onDeleteAnchor={(id) => {
           canvasRef.current?.deleteAnchor(id);
           if (selectedAnchorId === id) setSelectedAnchorId(null);

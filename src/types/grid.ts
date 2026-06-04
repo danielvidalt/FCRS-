@@ -53,6 +53,8 @@ export interface FreeLabelData {
   backgroundEnabled?: boolean;
 }
 
+export type AnchorMarkerType = "label" | "x" | "circle" | "square";
+
 export interface AnchorData {
   id: string;
   index: number;
@@ -61,6 +63,11 @@ export interface AnchorData {
   notes: string;
   notesX?: number;
   notesY?: number;
+  markerType: AnchorMarkerType;
+  markerSize: number;
+  markerColor: string;
+  notesSize: number;
+  notesColor: string;
 }
 
 export interface GridLineData {
