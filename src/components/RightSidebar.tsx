@@ -32,8 +32,6 @@ interface RightSidebarProps {
   onDeleteLine: () => void;
   onToggleAnchorMode: () => void;
   onSelectAnchor: (id: string) => void;
-  onUpdateAnchorNotes: (id: string, notes: string) => void;
-  onUpdateAnchorPhoto: (id: string, dataUrl: string | undefined) => void;
   onDeleteAnchor: (id: string) => void;
 }
 
@@ -65,8 +63,6 @@ export default function RightSidebar({
   onDeleteLine,
   onToggleAnchorMode,
   onSelectAnchor,
-  onUpdateAnchorNotes,
-  onUpdateAnchorPhoto,
   onDeleteAnchor,
 }: RightSidebarProps) {
   const [scaleX, setScaleX] = useState(100);
@@ -569,8 +565,6 @@ export default function RightSidebar({
         hasImage={hasImage}
         onToggleMode={onToggleAnchorMode}
         onSelect={onSelectAnchor}
-        onUpdateNotes={onUpdateAnchorNotes}
-        onUpdatePhoto={onUpdateAnchorPhoto}
         onDelete={onDeleteAnchor}
       />
 
@@ -730,8 +724,6 @@ function AnchorSection({
   hasImage,
   onToggleMode,
   onSelect,
-  onUpdateNotes,
-  onUpdatePhoto,
   onDelete,
 }: {
   anchors: AnchorData[];
@@ -740,12 +732,9 @@ function AnchorSection({
   hasImage: boolean;
   onToggleMode: () => void;
   onSelect: (id: string) => void;
-  onUpdateNotes: (id: string, notes: string) => void;
-  onUpdatePhoto: (id: string, dataUrl: string | undefined) => void;
   onDelete: (id: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const selectedAnchor = anchors.find((a) => a.id === selectedAnchorId) ?? null;
 
   return (
     <div className="border-t border-slate-800 pt-3">
@@ -766,7 +755,7 @@ function AnchorSection({
       </button>
 
       {open && (
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-2">
           <button
             type="button"
             disabled={!hasImage}
@@ -785,94 +774,32 @@ function AnchorSection({
               {anchors.map((anchor) => (
                 <li
                   key={anchor.id}
-                  onClick={() => onSelect(anchor.id)}
-                  className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition ${
+                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 transition ${
                     selectedAnchorId === anchor.id
                       ? "bg-orange-900/50 text-orange-200 ring-1 ring-orange-700"
-                      : "bg-slate-800/50 text-slate-300 hover:bg-slate-800"
+                      : "bg-slate-800/50 text-slate-300"
                   }`}
                 >
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-orange-500 text-[10px] font-bold text-slate-900">
-                    {anchor.index}
-                  </span>
-                  <span className="flex-1 truncate text-xs">
-                    {anchor.notes ? (
-                      anchor.notes
-                    ) : (
-                      <span className="text-slate-500">No notes</span>
-                    )}
-                  </span>
-                  {anchor.photoDataUrl && (
-                    <span className="text-xs text-orange-400">📷</span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onSelect(anchor.id)}
+                    className="flex flex-1 items-center gap-2 text-left"
+                  >
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-orange-500 text-[10px] font-bold text-slate-900">
+                      {anchor.index}
+                    </span>
+                    <span className="text-xs">A-{anchor.index}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(anchor.id)}
+                    className="text-slate-600 hover:text-red-400 text-xs px-1"
+                  >
+                    ✕
+                  </button>
                 </li>
               ))}
             </ul>
-          )}
-
-          {selectedAnchor && (
-            <div className="space-y-2 rounded-md border border-orange-800/40 bg-orange-950/20 p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-orange-300">
-                  A-{selectedAnchor.index}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onDelete(selectedAnchor.id)}
-                  className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/40"
-                >
-                  Delete
-                </button>
-              </div>
-              <label className="block space-y-1">
-                <span className="text-xs text-slate-400">Notes</span>
-                <textarea
-                  value={selectedAnchor.notes}
-                  onChange={(e) => onUpdateNotes(selectedAnchor.id, e.target.value)}
-                  rows={3}
-                  className="w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-orange-600 focus:outline-none"
-                  placeholder="Inspection notes…"
-                />
-              </label>
-              <div className="space-y-1">
-                <span className="text-xs text-slate-400">Photo</span>
-                {selectedAnchor.photoDataUrl ? (
-                  <div className="space-y-1">
-                    <img
-                      src={selectedAnchor.photoDataUrl}
-                      alt={`Anchor A-${selectedAnchor.index}`}
-                      className="w-full rounded-md object-cover"
-                      style={{ maxHeight: 120 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onUpdatePhoto(selectedAnchor.id, undefined)}
-                      className="w-full rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-400 hover:bg-slate-700"
-                    >
-                      Remove photo
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed border-slate-700 bg-slate-900 px-3 py-3 text-xs text-slate-500 hover:border-orange-700 hover:text-orange-400">
-                    <span>Click to add photo</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = () =>
-                          onUpdatePhoto(selectedAnchor.id, reader.result as string);
-                        reader.readAsDataURL(file);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
           )}
         </div>
       )}

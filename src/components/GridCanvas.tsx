@@ -130,7 +130,6 @@ export interface GridCanvasHandle {
   getCanvasSize: () => { width: number; height: number };
   hasImage: () => boolean;
   deleteAnchor: (id: string) => void;
-  updateAnchorMeta: (id: string, partial: Partial<Pick<AnchorData, "notes" | "photoDataUrl">>) => void;
   selectAnchor: (id: string) => void;
 }
 
@@ -148,7 +147,6 @@ interface GridCanvasProps {
 type HistoryEntry = {
   lines: GridLineData[];
   freeLabels: FreeLabelData[];
-  anchors: AnchorData[];
   view: ViewState;
   hiddenLabelKeys: Record<string, boolean>;
 };
@@ -210,11 +208,9 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       if (!canvas) return;
       const lines = extractLines(canvas);
       const freeLabels = extractFreeLabels(canvas);
-      const anchors = extractAnchors(canvas);
       const entry: HistoryEntry = {
         lines,
         freeLabels,
-        anchors,
         view: { ...viewRef.current },
         hiddenLabelKeys: { ...settingsRef.current.hiddenLabelKeys },
       };
@@ -948,7 +944,6 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           index: anchorCounterRef.current,
           x: point.x,
           y: point.y,
-          notes: "",
         };
         anchorsMetaRef.current.set(id, anchor);
         const itext = new IText(`A-${anchor.index}`, {
@@ -1068,7 +1063,6 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           gridSettings,
           lines: extractLines(canvas),
           freeLabels: extractFreeLabels(canvas),
-          anchors: extractAnchors(canvas),
           gridLabelPositions: Object.fromEntries(manualLabelPositionsRef.current),
           view: { ...viewRef.current },
           canvasWidth: canvas.getWidth(),
@@ -1106,11 +1100,11 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         }
 
         anchorCounterRef.current = 0;
+        renderAnchors(canvas, []);
+        onAnchorsChangeRef.current([]);
         renderLines(canvas, project.lines, gridSettings);
         renderLabels(canvas, gridSettings);
         renderFreeLabels(canvas, project.freeLabels ?? [], gridSettings);
-        renderAnchors(canvas, project.anchors ?? []);
-        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         applyView(project.view);
         pushHistory();
       },
@@ -1153,8 +1147,6 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLines(canvas, entry.lines, nextSettings);
         renderLabelsRef.current(canvas, nextSettings);
         renderFreeLabelsRef.current(canvas, entry.freeLabels ?? [], nextSettings);
-        renderAnchorsRef.current(canvas, entry.anchors ?? []);
-        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         applyView(entry.view);
         onHistoryChange(historyIndexRef.current > 0, true);
       },
@@ -1174,8 +1166,6 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         renderLines(canvas, entry.lines, nextSettings);
         renderLabelsRef.current(canvas, nextSettings);
         renderFreeLabelsRef.current(canvas, entry.freeLabels ?? [], nextSettings);
-        renderAnchorsRef.current(canvas, entry.anchors ?? []);
-        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         applyView(entry.view);
         onHistoryChange(
           historyIndexRef.current > 0,
@@ -1472,13 +1462,6 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         canvas.requestRenderAll();
         onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
         pushHistory();
-      },
-
-      updateAnchorMeta: (id: string, partial: Partial<Pick<AnchorData, "notes" | "photoDataUrl">>) => {
-        const existing = anchorsMetaRef.current.get(id);
-        if (!existing) return;
-        anchorsMetaRef.current.set(id, { ...existing, ...partial });
-        onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
       },
 
       selectAnchor: (id: string) => {

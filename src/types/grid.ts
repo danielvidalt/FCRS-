@@ -58,8 +58,6 @@ export interface AnchorData {
   index: number;
   x: number;
   y: number;
-  notes: string;
-  photoDataUrl?: string;
 }
 
 export interface GridLineData {
@@ -84,7 +82,6 @@ export interface ProjectData {
   gridSettings: GridSettings;
   lines: GridLineData[];
   freeLabels?: FreeLabelData[];
-  anchors?: AnchorData[];
   gridLabelPositions?: Record<string, { x: number; y: number }>;
   view: ViewState;
   canvasWidth: number;
