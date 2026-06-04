@@ -733,7 +733,7 @@ export default function FacadeGridMapper() {
           canvasRef.current?.updateAnchorNotes(id, notes)
         }
         onUpdateAnchorMarker={(id, partial) =>
-          canvasRef.current?.updateAnchorMarker(id, partial)
+          canvasRef.current?.updateAnchorMarker(id, partial as Parameters<NonNullable<typeof canvasRef.current>["updateAnchorMarker"]>[1])
         }
         activeAnchorType={activeAnchorType}
         activeAnchorSize={activeAnchorSize}

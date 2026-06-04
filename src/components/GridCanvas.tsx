@@ -143,7 +143,7 @@ function buildAnchorNotesText(anchor: AnchorData): IText {
     fontSize: anchor.notesSize,
     fontFamily: "system-ui, sans-serif",
     fill: anchor.notesColor,
-    backgroundColor: "rgba(15, 23, 42, 0.88)",
+    backgroundColor: anchor.notesBackgroundColor,
     padding: 5,
     left: anchor.notesX ?? anchor.x + 30,
     top: anchor.notesY ?? anchor.y,
@@ -193,7 +193,7 @@ export interface GridCanvasHandle {
   hasImage: () => boolean;
   deleteAnchor: (id: string) => void;
   updateAnchorNotes: (id: string, notes: string) => void;
-  updateAnchorMarker: (id: string, partial: Partial<Pick<AnchorData, "markerType" | "markerSize" | "markerColor" | "notesSize" | "notesColor">>) => void;
+  updateAnchorMarker: (id: string, partial: Partial<Pick<AnchorData, "markerType" | "markerSize" | "markerColor" | "notesSize" | "notesColor" | "notesBackgroundColor">>) => void;
   selectAnchor: (id: string) => void;
 }
 
@@ -1073,6 +1073,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
           markerColor: activeAnchorColorRef.current,
           notesSize: 11,
           notesColor: "#fdba74",
+          notesBackgroundColor: "rgba(15, 23, 42, 0.88)",
         };
         anchorsMetaRef.current.set(id, anchor);
         const badge = buildAnchorBadge(anchor);
@@ -1631,7 +1632,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         }
 
         // Rebuild notes label if notes style changed
-        if (("notesSize" in partial || "notesColor" in partial) && updated.notes) {
+        if (("notesSize" in partial || "notesColor" in partial || "notesBackgroundColor" in partial) && updated.notes) {
           const notesObj = canvas.getObjects().find(
             (o) => (o as FabricObject & Record<string, string>)[ANCHOR_NOTES_KEY] === id
           );

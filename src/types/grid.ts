@@ -68,6 +68,7 @@ export interface AnchorData {
   markerColor: string;
   notesSize: number;
   notesColor: string;
+  notesBackgroundColor: string;
 }
 
 export interface GridLineData {

@@ -43,7 +43,7 @@ interface RightSidebarProps {
   onToggleAnchorMode: () => void;
   onSelectAnchor: (id: string) => void;
   onUpdateAnchorNotes: (id: string, notes: string) => void;
-  onUpdateAnchorMarker: (id: string, partial: Partial<Pick<AnchorData, "markerType" | "markerSize" | "markerColor" | "notesSize" | "notesColor">>) => void;
+  onUpdateAnchorMarker: (id: string, partial: Partial<Pick<AnchorData, "markerType" | "markerSize" | "markerColor" | "notesSize" | "notesColor" | "notesBackgroundColor">>) => void;
   onChangeActiveAnchorType: (t: AnchorMarkerType) => void;
   onChangeActiveAnchorSize: (s: number) => void;
   onChangeActiveAnchorColor: (c: string) => void;
@@ -117,7 +117,7 @@ export default function RightSidebar({
     <aside className="flex w-72 shrink-0 flex-col gap-0 overflow-y-auto border-l border-slate-700 bg-slate-950 p-4">
 
       {/* ── Section 1: Grid ── */}
-      <CollapsibleSection title="Grid" defaultOpen>
+      <CollapsibleSection title="Grid" defaultOpen={false}>
         <div className="flex flex-col gap-2">
           <button type="button" disabled={!hasImage} onClick={onGenerate}
             className="w-full rounded-lg bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40">
@@ -237,7 +237,7 @@ export default function RightSidebar({
       </CollapsibleSection>
 
       {/* ── Section 2: Labels ── */}
-      <CollapsibleSection title="Labels" defaultOpen>
+      <CollapsibleSection title="Labels" defaultOpen={false}>
         <div className="flex flex-col gap-2">
           <button type="button" disabled={!hasImage} onClick={onAddLabel}
             className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2.5 text-sm font-medium text-slate-200 hover:border-slate-500 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
@@ -301,7 +301,7 @@ export default function RightSidebar({
         badge={anchors.length > 0
           ? <span className="rounded bg-orange-900/60 px-1.5 py-0.5 text-orange-300">{anchors.length}</span>
           : undefined}
-        defaultOpen
+        defaultOpen={false}
       >
         <div className="space-y-3">
           {/* Place button */}
@@ -373,18 +373,25 @@ export default function RightSidebar({
                       </Field>
 
                       {anchor.notes && (
-                        <div className="flex items-center gap-2">
-                          <Field label="Notes color">
-                            <input type="color" value={anchor.notesColor}
-                              onChange={(e) => onUpdateAnchorMarker(anchor.id, { notesColor: e.target.value })}
+                        <>
+                          <div className="flex items-center gap-2">
+                            <Field label="Notes color">
+                              <input type="color" value={anchor.notesColor}
+                                onChange={(e) => onUpdateAnchorMarker(anchor.id, { notesColor: e.target.value })}
+                                className="h-8 w-full cursor-pointer rounded border border-slate-700 bg-slate-900" />
+                            </Field>
+                            <Field label={`Notes size ${anchor.notesSize}`}>
+                              <input type="range" min={8} max={32} value={anchor.notesSize}
+                                onChange={(e) => onUpdateAnchorMarker(anchor.id, { notesSize: Number(e.target.value) })}
+                                className="w-full accent-orange-500" />
+                            </Field>
+                          </div>
+                          <Field label="Notes background">
+                            <input type="color" value={hexFromRgba(anchor.notesBackgroundColor)}
+                              onChange={(e) => onUpdateAnchorMarker(anchor.id, { notesBackgroundColor: rgbaFromHex(e.target.value, 0.88) })}
                               className="h-8 w-full cursor-pointer rounded border border-slate-700 bg-slate-900" />
                           </Field>
-                          <Field label={`Notes size ${anchor.notesSize}`}>
-                            <input type="range" min={8} max={32} value={anchor.notesSize}
-                              onChange={(e) => onUpdateAnchorMarker(anchor.id, { notesSize: Number(e.target.value) })}
-                              className="w-full accent-orange-500" />
-                          </Field>
-                        </div>
+                        </>
                       )}
                     </div>
                   )}
