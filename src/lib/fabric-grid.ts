@@ -13,6 +13,7 @@ import type { GridLineData, GridSettings } from "@/types/grid";
 export const GRID_LINE_KEY = "gridLineId";
 export const FREE_LABEL_KEY = "freeLabelId";
 export const ANCHOR_KEY = "anchorId";
+export const ANCHOR_NOTES_KEY = "anchorNotesId";
 
 function lineColorFor(settings: GridSettings, line: GridLineData) {
   return line.orientation === "vertical"

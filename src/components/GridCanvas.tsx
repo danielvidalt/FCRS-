@@ -19,6 +19,7 @@ import {
 } from "fabric";
 import {
   ANCHOR_KEY,
+  ANCHOR_NOTES_KEY,
   applyGridLineStyle,
   buildGridLineObject,
   fabricObjectToLineData,
@@ -501,17 +502,19 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       (canvas: Canvas, anchors: AnchorData[]) => {
         canvas
           .getObjects()
-          .filter((o) => !!(o as FabricObject & Record<string, string>)[ANCHOR_KEY])
+          .filter((o) => {
+            const rec = o as FabricObject & Record<string, string>;
+            return !!(rec[ANCHOR_KEY] || rec[ANCHOR_NOTES_KEY]);
+          })
           .forEach((o) => canvas.remove(o));
         anchorsMetaRef.current.clear();
         let maxIndex = 0;
         anchors.forEach((anchor) => {
           anchorsMetaRef.current.set(anchor.id, anchor);
           if (anchor.index > maxIndex) maxIndex = anchor.index;
-          const displayText = anchor.notes
-            ? `A-${anchor.index} — ${anchor.notes}`
-            : `A-${anchor.index}`;
-          const itext = new IText(displayText, {
+
+          // Badge — non-editable orange marker
+          const badge = new IText(`A-${anchor.index}`, {
             fontSize: 11,
             fontFamily: "system-ui, sans-serif",
             fill: "#1e293b",
@@ -520,17 +523,43 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
             left: anchor.x,
             top: anchor.y,
             selectable: true,
-            editable: true,
+            editable: false,
             objectCaching: false,
             hasControls: false,
             lockScalingX: true,
             lockScalingY: true,
             lockRotation: true,
           });
-          applyBackgroundPadding(itext);
-          itext.set({ [ANCHOR_KEY]: anchor.id } as Record<string, string>);
-          canvas.add(itext);
-          canvas.bringObjectToFront(itext);
+          applyBackgroundPadding(badge);
+          badge.set({ [ANCHOR_KEY]: anchor.id } as Record<string, string>);
+          canvas.add(badge);
+          canvas.bringObjectToFront(badge);
+
+          // Notes — separate editable label, only if non-empty
+          if (anchor.notes) {
+            const notesX = anchor.notesX ?? anchor.x + 30;
+            const notesY = anchor.notesY ?? anchor.y;
+            const notesText = new IText(anchor.notes, {
+              fontSize: 11,
+              fontFamily: "system-ui, sans-serif",
+              fill: "#fdba74",
+              backgroundColor: "rgba(15, 23, 42, 0.88)",
+              padding: 5,
+              left: notesX,
+              top: notesY,
+              selectable: true,
+              editable: true,
+              objectCaching: false,
+              hasControls: false,
+              lockScalingX: true,
+              lockScalingY: true,
+              lockRotation: true,
+            });
+            applyBackgroundPadding(notesText);
+            notesText.set({ [ANCHOR_NOTES_KEY]: anchor.id } as Record<string, string>);
+            canvas.add(notesText);
+            canvas.bringObjectToFront(notesText);
+          }
         });
         anchorCounterRef.current = Math.max(anchorCounterRef.current, maxIndex);
         canvas.renderAll();
@@ -585,8 +614,22 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       const onModified = (e?: { target?: FabricObject }) => {
         const target = e?.target ?? canvas.getActiveObject();
         if (target instanceof Text) {
-          const anchorId = (target as Text & Record<string, string>)[ANCHOR_KEY];
-          if (anchorId) {
+          const rec = target as Text & Record<string, string>;
+          const anchorNotesId = rec[ANCHOR_NOTES_KEY];
+          const anchorId = rec[ANCHOR_KEY];
+          const freeId = rec[FREE_LABEL_KEY];
+          const labelKey = rec[LABEL_KEY];
+          if (anchorNotesId) {
+            const existing = anchorsMetaRef.current.get(anchorNotesId);
+            if (existing) {
+              anchorsMetaRef.current.set(anchorNotesId, {
+                ...existing,
+                notesX: target.left ?? existing.notesX,
+                notesY: target.top ?? existing.notesY,
+              });
+              onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+            }
+          } else if (anchorId) {
             const existing = anchorsMetaRef.current.get(anchorId);
             if (existing) {
               anchorsMetaRef.current.set(anchorId, {
@@ -596,21 +639,17 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
               });
               onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
             }
-          } else {
-            const freeId = (target as Text & Record<string, string>)[FREE_LABEL_KEY];
-            if (freeId) {
-              const existing = freeLabelsMetaRef.current.get(freeId);
-              freeLabelsMetaRef.current.set(freeId, {
-                ...existing,
-                id: freeId,
-                text: (target as IText).text ?? "",
-                x: target.left ?? 0,
-                y: target.top ?? 0,
-              });
-            } else {
-              const key = (target as Text & Record<string, string>)[LABEL_KEY];
-              if (key) rememberLabelPosition(target, manualLabelPositionsRef.current);
-            }
+          } else if (freeId) {
+            const existing = freeLabelsMetaRef.current.get(freeId);
+            freeLabelsMetaRef.current.set(freeId, {
+              ...existing,
+              id: freeId,
+              text: (target as IText).text ?? "",
+              x: target.left ?? 0,
+              y: target.top ?? 0,
+            });
+          } else if (labelKey) {
+            rememberLabelPosition(target, manualLabelPositionsRef.current);
           }
         } else if (target && isGridLineObject(target)) {
           updateLineAndSyncLabelsRef.current(target);
@@ -641,24 +680,23 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
 
       // Save label text + position when inline editing exits.
       canvas.on("text:editing:exited", ({ target }) => {
-        const anchorId = (target as IText & Record<string, string>)[ANCHOR_KEY];
-        if (anchorId) {
-          const existing = anchorsMetaRef.current.get(anchorId);
+        const anchorNotesId = (target as IText & Record<string, string>)[ANCHOR_NOTES_KEY];
+        if (anchorNotesId) {
+          const existing = anchorsMetaRef.current.get(anchorNotesId);
           if (existing) {
-            // Parse notes from edited text: everything after "A-N — " or "A-N"
-            const full = target.text ?? `A-${existing.index}`;
-            const prefix = `A-${existing.index} — `;
-            const notes = full.startsWith(prefix)
-              ? full.slice(prefix.length)
-              : full === `A-${existing.index}`
-              ? ""
-              : full;
-            anchorsMetaRef.current.set(anchorId, {
-              ...existing,
-              notes,
-              x: target.left ?? existing.x,
-              y: target.top ?? existing.y,
-            });
+            const newNotes = target.text ?? "";
+            if (newNotes) {
+              anchorsMetaRef.current.set(anchorNotesId, {
+                ...existing,
+                notes: newNotes,
+                notesX: target.left ?? existing.notesX,
+                notesY: target.top ?? existing.notesY,
+              });
+            } else {
+              anchorsMetaRef.current.set(anchorNotesId, { ...existing, notes: "" });
+              canvas.remove(target);
+              canvas.discardActiveObject();
+            }
             onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
           }
           pushHistory();
@@ -720,9 +758,28 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         }
 
         if (target instanceof Text) {
-          const anchorId = (target as Text & Record<string, string>)[ANCHOR_KEY];
+          const rec = target as Text & Record<string, string>;
+          const anchorNotesId = rec[ANCHOR_NOTES_KEY];
+          if (anchorNotesId) {
+            event.preventDefault();
+            const existing = anchorsMetaRef.current.get(anchorNotesId);
+            if (existing) {
+              anchorsMetaRef.current.set(anchorNotesId, { ...existing, notes: "", notesX: undefined, notesY: undefined });
+              onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
+            }
+            canvas.remove(target);
+            canvas.discardActiveObject();
+            canvas.requestRenderAll();
+            pushHistory();
+            return;
+          }
+          const anchorId = rec[ANCHOR_KEY];
           if (anchorId) {
             event.preventDefault();
+            const notesObj = canvas.getObjects().find(
+              (o) => (o as FabricObject & Record<string, string>)[ANCHOR_NOTES_KEY] === anchorId
+            );
+            if (notesObj) canvas.remove(notesObj);
             anchorsMetaRef.current.delete(anchorId);
             canvas.remove(target);
             canvas.discardActiveObject();
@@ -732,7 +789,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
             pushHistory();
             return;
           }
-          const freeId = (target as Text & Record<string, string>)[FREE_LABEL_KEY];
+          const freeId = rec[FREE_LABEL_KEY];
           if (freeId) {
             event.preventDefault();
             freeLabelsMetaRef.current.delete(freeId);
@@ -764,7 +821,8 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         const rec = obj as (FabricObject & Record<string, string>) | undefined;
         const lineId = rec?.[GRID_LINE_KEY];
         const freeId = rec?.[FREE_LABEL_KEY];
-        const anchorId = rec?.[ANCHOR_KEY];
+        // Both badge (ANCHOR_KEY) and notes label (ANCHOR_NOTES_KEY) report the same anchor
+        const anchorId = rec?.[ANCHOR_KEY] ?? rec?.[ANCHOR_NOTES_KEY];
         onSelectionChangeRef.current(
           typeof lineId === "string" ? lineId : null,
           typeof freeId === "string" ? freeId : null,
@@ -1042,6 +1100,13 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         canvas
           .getObjects()
           .filter((o) => (o as FabricObject & Record<string, string>)[FREE_LABEL_KEY])
+          .forEach((o) => canvas.remove(o));
+        canvas
+          .getObjects()
+          .filter((o) => {
+            const rec = o as FabricObject & Record<string, string>;
+            return !!(rec[ANCHOR_KEY] || rec[ANCHOR_NOTES_KEY]);
+          })
           .forEach((o) => canvas.remove(o));
         linesMetaRef.current.clear();
         freeLabelsMetaRef.current.clear();
@@ -1481,10 +1546,12 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       deleteAnchor: (id: string) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const obj = canvas
-          .getObjects()
-          .find((o) => (o as FabricObject & Record<string, string>)[ANCHOR_KEY] === id);
-        if (obj) canvas.remove(obj);
+        canvas.getObjects()
+          .filter((o) => {
+            const rec = o as FabricObject & Record<string, string>;
+            return rec[ANCHOR_KEY] === id || rec[ANCHOR_NOTES_KEY] === id;
+          })
+          .forEach((o) => canvas.remove(o));
         anchorsMetaRef.current.delete(id);
         canvas.discardActiveObject();
         canvas.requestRenderAll();
@@ -1498,18 +1565,40 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         const existing = anchorsMetaRef.current.get(id);
         if (!existing) return;
         anchorsMetaRef.current.set(id, { ...existing, notes });
-        const obj = canvas
-          .getObjects()
-          .find((o) => (o as FabricObject & Record<string, string>)[ANCHOR_KEY] === id);
-        if (obj instanceof IText) {
-          const displayText = notes
-            ? `A-${existing.index} — ${notes}`
-            : `A-${existing.index}`;
-          obj.set({ text: displayText });
-          applyBackgroundPadding(obj);
-          obj.setCoords();
-          canvas.requestRenderAll();
+
+        // Remove any existing notes label
+        const existingNotesObj = canvas.getObjects().find(
+          (o) => (o as FabricObject & Record<string, string>)[ANCHOR_NOTES_KEY] === id
+        );
+        if (existingNotesObj) canvas.remove(existingNotesObj);
+
+        // Create a fresh notes label if notes is non-empty
+        if (notes) {
+          const anchor = anchorsMetaRef.current.get(id)!;
+          const notesX = anchor.notesX ?? anchor.x + 30;
+          const notesY = anchor.notesY ?? anchor.y;
+          const notesText = new IText(notes, {
+            fontSize: 11,
+            fontFamily: "system-ui, sans-serif",
+            fill: "#fdba74",
+            backgroundColor: "rgba(15, 23, 42, 0.88)",
+            padding: 5,
+            left: notesX,
+            top: notesY,
+            selectable: true,
+            editable: true,
+            objectCaching: false,
+            hasControls: false,
+            lockScalingX: true,
+            lockScalingY: true,
+            lockRotation: true,
+          });
+          applyBackgroundPadding(notesText);
+          notesText.set({ [ANCHOR_NOTES_KEY]: id } as Record<string, string>);
+          canvas.add(notesText);
+          canvas.bringObjectToFront(notesText);
         }
+        canvas.requestRenderAll();
         onAnchorsChangeRef.current([...anchorsMetaRef.current.values()]);
       },
 

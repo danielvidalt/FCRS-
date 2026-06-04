@@ -59,6 +59,8 @@ export interface AnchorData {
   x: number;
   y: number;
   notes: string;
+  notesX?: number;
+  notesY?: number;
 }
 
 export interface GridLineData {
