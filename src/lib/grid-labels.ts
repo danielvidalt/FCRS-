@@ -30,9 +30,10 @@ export function fabricLabelStyle(settings: GridSettings) {
     fontSize: settings.labelFontSize,
     fontFamily: "system-ui, sans-serif",
     fill: settings.labelColor,
-    textBackgroundColor: settings.labelBackgroundEnabled
+    backgroundColor: settings.labelBackgroundEnabled
       ? settings.labelBackgroundColor
       : "",
+    textBackgroundColor: "",
     padding: 6,
     selectable: true,
     editable: true,
