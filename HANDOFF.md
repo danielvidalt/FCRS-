@@ -1,6 +1,6 @@
 # FCRS Grid Tool — Hand-off
 
-**Última actualización:** 2026-06-04  
+**Última actualización:** 2026-06-05  
 **Producción:** https://fcrs-zeta.vercel.app  
 **Repo:** https://github.com/danielvidalt/FCRS-
 
@@ -195,6 +195,39 @@ Add label, selected free label style, label appearance (font, color, background)
 
 ---
 
+## Pan con gestos (nuevo — 2026-06-05)
+
+Se agregaron dos gestos de pan que funcionan **sin activar el toggle "Pan mode"** del sidebar:
+
+| Gesto | Comportamiento |
+|---|---|
+| `Space` + drag | Pan temporal. Cursor → "grab" al presionar, "grabbing" al arrastrar. Al soltar Space vuelve al cursor/selección anterior. |
+| Middle-click + drag | Pan directo. Funciona en cualquier modo activo. |
+
+### Implementación (`GridCanvas.tsx`)
+
+**Refs nuevos:**
+```ts
+const spaceDownRef = useRef(false);   // true mientras Space está presionado
+const tempPanningRef = useRef(false); // true durante pan temporal (space o middle-click)
+const panModeRef = useRef(panMode);   // ref estable de panMode para usar dentro de closures del init effect
+```
+
+**`panModeRef.current`** se actualiza en cada render junto a los demás refs estables.
+
+**Handlers de Space** (registrados en el init effect `[]`, limpios en el cleanup):
+- `onSpaceDown`: activa `spaceDownRef`, cambia cursor a "grab", desactiva `canvas.selection`. Ignora si el target es un `INPUT`/`TEXTAREA`/contenteditable o si Fabric está editando texto inline.
+- `onSpaceUp`: desactiva `spaceDownRef` y `tempPanningRef`, restaura cursor y `canvas.selection`.
+
+**panMode effect** — los handlers `onDown`/`onMove`/`onUp` se ampliaron:
+- `onDown`: si `button === 1` (middle) o `spaceDownRef.current` → activa `tempPanningRef`, previene el default de middle-click.
+- `onMove`: condición `tempPanningRef.current || (panMode && isPanningRef.current)` — pan funciona para ambas rutas.
+- `onUp`: limpia ambas flags, restaura cursor según el modo activo.
+
+El "Pan mode" del sidebar sigue funcionando igual que antes; los gestos son capas adicionales.
+
+---
+
 ## Bug corregido hoy: labels de tabs se desajustan al navegar
 
 **Fecha:** 2026-06-04  
@@ -246,6 +279,7 @@ Add label, selected free label style, label appearance (font, color, background)
 - [x] Anchors: marcadores de puntos de anclaje, 4 tipos de marker, notas independientes en canvas, estilos editables
 - [x] RightSidebar colapsable en 3 secciones (Grid / Labels / Anchors)
 - [x] Fix: aislamiento de posiciones de labels por tab de proyecto
+- [x] Pan con gestos: Space+drag y middle-click drag (sin activar Pan mode)
 
 ---
 
