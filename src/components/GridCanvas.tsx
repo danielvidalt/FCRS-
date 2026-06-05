@@ -260,6 +260,9 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
     const viewRef = useRef<ViewState>({ zoom: 1, panX: 0, panY: 0 });
     const isPanningRef = useRef(false);
     const lastPanRef = useRef({ x: 0, y: 0 });
+    const spaceDownRef = useRef(false);
+    const tempPanningRef = useRef(false);
+    const panModeRef = useRef(panMode);
     const [ready, setReady] = useState(false);
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onHistoryChangeRef = useRef(onHistoryChange);
@@ -269,6 +272,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
     const moveGridModeRef = useRef(moveGridMode);
     onSelectionChangeRef.current = onSelectionChange;
     moveGridModeRef.current = moveGridMode;
+    panModeRef.current = panMode;
     onHistoryChangeRef.current = onHistoryChange;
     onSettingsChangeRef.current = onSettingsChange;
     onAnchorsChangeRef.current = onAnchorsChange;
@@ -854,6 +858,31 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       };
       window.addEventListener("keydown", onKeyDown);
 
+      const onSpaceDown = (e: KeyboardEvent) => {
+        if (e.code !== "Space" || e.repeat) return;
+        const evtTarget = e.target as HTMLElement;
+        if (evtTarget.tagName === "INPUT" || evtTarget.tagName === "TEXTAREA" || evtTarget.isContentEditable) return;
+        const active = canvas.getActiveObject() as (FabricObject & { isEditing?: boolean }) | undefined;
+        if (active?.isEditing) return;
+        e.preventDefault();
+        spaceDownRef.current = true;
+        if (!panModeRef.current) {
+          canvas.defaultCursor = "grab";
+          canvas.selection = false;
+        }
+      };
+      const onSpaceUp = (e: KeyboardEvent) => {
+        if (e.code !== "Space") return;
+        spaceDownRef.current = false;
+        tempPanningRef.current = false;
+        if (!panModeRef.current) {
+          canvas.defaultCursor = "default";
+          canvas.selection = true;
+        }
+      };
+      window.addEventListener("keydown", onSpaceDown);
+      window.addEventListener("keyup", onSpaceUp);
+
       const fireSelection = () => {
         const obj = canvas.getActiveObject();
         const rec = obj as (FabricObject & Record<string, string>) | undefined;
@@ -903,6 +932,8 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
 
       return () => {
         window.removeEventListener("keydown", onKeyDown);
+        window.removeEventListener("keydown", onSpaceDown);
+        window.removeEventListener("keyup", onSpaceUp);
         resizeObserver.disconnect();
         canvas.dispose();
         canvasRef.current = null;
@@ -926,13 +957,22 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
       };
 
       const onDown = (opt: TPointerEventInfo) => {
+        const isMiddleClick = (opt.e as MouseEvent).button === 1;
+        if (isMiddleClick || spaceDownRef.current) {
+          if (isMiddleClick) opt.e.preventDefault();
+          tempPanningRef.current = true;
+          lastPanRef.current = pointerXY(opt);
+          canvas.defaultCursor = "grabbing";
+          return;
+        }
         if (!panMode) return;
         isPanningRef.current = true;
         lastPanRef.current = pointerXY(opt);
         canvas.defaultCursor = "grabbing";
       };
       const onMove = (opt: TPointerEventInfo) => {
-        if (!panMode || !isPanningRef.current) return;
+        const panning = tempPanningRef.current || (panMode && isPanningRef.current);
+        if (!panning) return;
         const vpt = canvas.viewportTransform;
         if (!vpt) return;
         const { x, y } = pointerXY(opt);
@@ -945,8 +985,15 @@ const GridCanvas = forwardRef<GridCanvasHandle, GridCanvasProps>(
         canvas.requestRenderAll();
       };
       const onUp = () => {
+        tempPanningRef.current = false;
         isPanningRef.current = false;
-        if (panMode) canvas.defaultCursor = "grab";
+        if (panMode) {
+          canvas.defaultCursor = "grab";
+        } else if (spaceDownRef.current) {
+          canvas.defaultCursor = "grab";
+        } else {
+          canvas.defaultCursor = "default";
+        }
       };
 
       canvas.on("mouse:down", onDown);
